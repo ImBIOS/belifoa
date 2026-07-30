@@ -12,7 +12,7 @@ import {
   handleToolCall,
 } from "./tools.js";
 
-async function runServer() {
+export async function startMcpServer() {
   const server = new Server(
     {
       name: "belifoa",
@@ -55,7 +55,9 @@ async function runServer() {
   await server.connect(transport);
 }
 
-runServer().catch((err) => {
-  console.error("Belifoa MCP Server Error:", err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  startMcpServer().catch((err) => {
+    console.error("Belifoa MCP Server Error:", err);
+    process.exit(1);
+  });
+}

@@ -160,6 +160,15 @@ program
     }
   });
 
+// MCP Server command
+program
+  .command("mcp")
+  .description("Start the Stdio MCP Server for Belifoa")
+  .action(async () => {
+    const { startMcpServer } = await import("../mcp/server.js");
+    await startMcpServer();
+  });
+
 // Utility command to format raw JSON files
 program
   .command("format")

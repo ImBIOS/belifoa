@@ -1,2 +1,2 @@
 #!/usr/bin/env bun
-export {};
+export declare function startMcpServer(): Promise<void>;

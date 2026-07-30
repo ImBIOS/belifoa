@@ -43,13 +43,13 @@ var __export = (target, all) => {
       set: __exportSetter.bind(all, name)
     });
 };
+var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 var __require = import.meta.require;
+
 // src/core/config.ts
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-var CONFIG_DIR = join(homedir(), ".config", "belifoa");
-var CONFIG_FILE = join(CONFIG_DIR, "config.json");
 function loadConfig() {
   let fileConfig = {};
   if (existsSync(CONFIG_FILE)) {
@@ -82,14 +82,13 @@ function resolveApiKey() {
   }
   throw new Error("Linear API key missing! Set LINEAR_API_KEY environment variable or run `belifoa auth set <lin_api_...>`");
 }
+var CONFIG_DIR, CONFIG_FILE;
+var init_config = __esm(() => {
+  CONFIG_DIR = join(homedir(), ".config", "belifoa");
+  CONFIG_FILE = join(CONFIG_DIR, "config.json");
+});
+
 // src/core/formatters.ts
-var PRIORITY_LABELS = {
-  0: "None",
-  1: "Urgent \uD83D\uDD34",
-  2: "High \uD83D\uDFE0",
-  3: "Normal \uD83D\uDFE1",
-  4: "Low \uD83D\uDD35"
-};
 function getPriorityLabel(priority) {
   return PRIORITY_LABELS[priority] || "None";
 }
@@ -229,9 +228,18 @@ function formatProjects(projects, format = "markdown") {
   return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join(`
 `);
 }
-// src/core/client.ts
-var LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
+var PRIORITY_LABELS;
+var init_formatters = __esm(() => {
+  PRIORITY_LABELS = {
+    0: "None",
+    1: "Urgent \uD83D\uDD34",
+    2: "High \uD83D\uDFE0",
+    3: "Normal \uD83D\uDFE1",
+    4: "Low \uD83D\uDD35"
+  };
+});
 
+// src/core/client.ts
 class BelifoaClient {
   apiKey;
   constructor(apiKey) {
@@ -494,97 +502,13 @@ class BelifoaClient {
     return data.projects?.nodes || [];
   }
 }
+var LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
+var init_client = __esm(() => {
+  init_config();
+  init_formatters();
+});
+
 // src/mcp/tools.ts
-var getIssueToolSchema = {
-  name: "linear_get_issue",
-  description: "Get detailed information for a Linear issue (e.g. ENG-123) with compact agent-optimized output.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      id: { type: "string", description: "Issue identifier (e.g., 'ENG-123') or UUID" },
-      format: {
-        type: "string",
-        enum: ["markdown", "compact_json", "raw_json"],
-        default: "markdown",
-        description: "Output format: 'markdown' (compact card), 'compact_json' (minified JSON), 'raw_json' (raw API response)"
-      }
-    },
-    required: ["id"]
-  }
-};
-var searchIssuesToolSchema = {
-  name: "linear_search_issues",
-  description: "Search Linear issues by keyword query, team, or status.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      query: { type: "string", description: "Search query or keyword" },
-      teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
-      limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
-      format: {
-        type: "string",
-        enum: ["markdown", "compact_json", "raw_json"],
-        default: "markdown"
-      }
-    },
-    required: ["query"]
-  }
-};
-var getMyIssuesToolSchema = {
-  name: "linear_get_my_issues",
-  description: "Get issues assigned to the authenticated user.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      limit: { type: "number", default: 20 },
-      format: {
-        type: "string",
-        enum: ["markdown", "compact_json", "raw_json"],
-        default: "markdown"
-      }
-    }
-  }
-};
-var manageIssueToolSchema = {
-  name: "linear_manage_issue",
-  description: "Unified tool to create, update, or add comments to a Linear issue in a single action call.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["create", "update", "comment"],
-        description: "Action to perform"
-      },
-      issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
-      teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG)" },
-      title: { type: "string", description: "Issue title for 'create' or 'update'" },
-      description: { type: "string", description: "Description text" },
-      priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
-      commentBody: { type: "string", description: "Comment body text" },
-      format: {
-        type: "string",
-        enum: ["markdown", "compact_json"],
-        default: "markdown"
-      }
-    },
-    required: ["action"]
-  }
-};
-var getTeamsAndProjectsToolSchema = {
-  name: "linear_get_teams_and_projects",
-  description: "Get list of available Linear teams and projects.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      format: {
-        type: "string",
-        enum: ["markdown", "compact_json"],
-        default: "markdown"
-      }
-    }
-  }
-};
 async function handleToolCall(name, args, client) {
   const format = args.format || "markdown";
   switch (name) {
@@ -658,6 +582,106 @@ ${formatIssueDetail(updated, format)}` }] };
       throw new Error(`Unknown tool name: ${name}`);
   }
 }
+var getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, getTeamsAndProjectsToolSchema;
+var init_tools = __esm(() => {
+  init_formatters();
+  getIssueToolSchema = {
+    name: "linear_get_issue",
+    description: "Get detailed information for a Linear issue (e.g. ENG-123) with compact agent-optimized output.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Issue identifier (e.g., 'ENG-123') or UUID" },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json", "raw_json"],
+          default: "markdown",
+          description: "Output format: 'markdown' (compact card), 'compact_json' (minified JSON), 'raw_json' (raw API response)"
+        }
+      },
+      required: ["id"]
+    }
+  };
+  searchIssuesToolSchema = {
+    name: "linear_search_issues",
+    description: "Search Linear issues by keyword query, team, or status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query or keyword" },
+        teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
+        limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json", "raw_json"],
+          default: "markdown"
+        }
+      },
+      required: ["query"]
+    }
+  };
+  getMyIssuesToolSchema = {
+    name: "linear_get_my_issues",
+    description: "Get issues assigned to the authenticated user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 20 },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json", "raw_json"],
+          default: "markdown"
+        }
+      }
+    }
+  };
+  manageIssueToolSchema = {
+    name: "linear_manage_issue",
+    description: "Unified tool to create, update, or add comments to a Linear issue in a single action call.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["create", "update", "comment"],
+          description: "Action to perform"
+        },
+        issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
+        teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG)" },
+        title: { type: "string", description: "Issue title for 'create' or 'update'" },
+        description: { type: "string", description: "Description text" },
+        priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+        commentBody: { type: "string", description: "Comment body text" },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json"],
+          default: "markdown"
+        }
+      },
+      required: ["action"]
+    }
+  };
+  getTeamsAndProjectsToolSchema = {
+    name: "linear_get_teams_and_projects",
+    description: "Get list of available Linear teams and projects.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json"],
+          default: "markdown"
+        }
+      }
+    }
+  };
+});
+
+// src/index.ts
+init_config();
+init_formatters();
+init_client();
+init_tools();
 export {
   searchIssuesToolSchema,
   saveConfig,
