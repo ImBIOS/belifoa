@@ -1,4 +1,26 @@
 import { BelifoaClient } from "../core/client.js";
+export declare const authStatusToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {};
+    };
+};
+export declare const setApiKeyToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {
+            apiKey: {
+                type: string;
+                description: string;
+            };
+        };
+        required: string[];
+    };
+};
 export declare const getIssueToolSchema: {
     name: string;
     description: string;
@@ -123,6 +145,7 @@ export declare const getTeamsAndProjectsToolSchema: {
         };
     };
 };
+export declare function getAuthGuidanceMessage(): string;
 export declare function handleToolCall(name: string, args: any, client: BelifoaClient): Promise<{
     content: Array<{
         type: "text";

@@ -4,6 +4,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { BelifoaClient } from "../core/client.js";
 import {
+  authStatusToolSchema,
+  setApiKeyToolSchema,
   getIssueToolSchema,
   searchIssuesToolSchema,
   getMyIssuesToolSchema,
@@ -30,6 +32,8 @@ export async function startMcpServer() {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
+        authStatusToolSchema,
+        setApiKeyToolSchema,
         getIssueToolSchema,
         searchIssuesToolSchema,
         getMyIssuesToolSchema,

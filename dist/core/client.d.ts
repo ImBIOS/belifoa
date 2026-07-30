@@ -2,6 +2,8 @@ import type { LinearIssue, LinearTeam, LinearProject, LinearUser } from "./types
 export declare class BelifoaClient {
     private apiKey;
     constructor(apiKey?: string);
+    setApiKey(key: string): void;
+    getApiKey(): string;
     private graphql;
     /**
      * Get authenticated user info

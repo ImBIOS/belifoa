@@ -11,10 +11,22 @@ export class BelifoaClient {
     this.apiKey = apiKey || loadConfig().apiKey || "";
   }
 
+  public setApiKey(key: string): void {
+    this.apiKey = key;
+  }
+
+  public getApiKey(): string {
+    return this.apiKey || loadConfig().apiKey || "";
+  }
+
   private async graphql<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
     if (!this.apiKey) {
+      this.apiKey = loadConfig().apiKey || "";
+    }
+
+    if (!this.apiKey) {
       throw new Error(
-        "Linear API Key is missing. Pass it to BelifoaClient, set LINEAR_API_KEY environment variable, or run `belifoa auth set <key>`."
+        "Linear API Key is missing! Set LINEAR_API_KEY environment variable, run `bun x github:ImBIOS/belifoa#main auth set <key>`, or call `linear_set_api_key` tool."
       );
     }
 
