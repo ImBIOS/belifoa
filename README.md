@@ -6,7 +6,7 @@
 
 ## 🌟 Why Belifoa?
 
-Standard Linear MCP integrations often suffer from:
+Standard Linear MCP integrations suffer from:
 1. **Short-Lived Auth**: Frustrating OAuth session expirations interrupting autonomous agent loops.
 2. **Heavy Payload Overhead**: Raw GraphQL API JSON responses return thousands of tokens of unnecessary metadata (`__typename`, node arrays, hex colors, avatar URLs).
 3. **Tool Sprawl**: 30+ fine-grained tools causing LLM tool selection confusion and multi-turn delays.
@@ -14,7 +14,7 @@ Standard Linear MCP integrations often suffer from:
 **Belifoa solves this with:**
 - **Persistent Auth**: Linear Personal API Keys (`lin_api_...`) that never expire unless revoked.
 - **70–80% Context Token Savings**: Beautiful, compact Markdown tables & cards or minified JSON.
-- **Unified Interfaces**: Available as a **CLI** (`bunx github:ImBIOS/belifoa`), **MCP Server**, **Antigravity Skill**, **Plugin**, and **Git Hook**.
+- **Unified Interfaces**: Available as a **CLI** (`bun x github:ImBIOS/belifoa#main`), **MCP Server** (`bun x github:ImBIOS/belifoa#main mcp`), **Antigravity Skill**, **Plugin**, and **Git Hook**.
 - **Objective Benchmarking Suite**: Automated tests verifying token footprint reduction.
 
 ---
@@ -23,26 +23,26 @@ Standard Linear MCP integrations often suffer from:
 
 ### 1. Installation & Direct Usage (Without publishing to npm)
 
-Users and AI agents can execute Belifoa directly from GitHub using `pnpm`, `pnpx`, or `bunx`:
+Users and AI agents can execute Belifoa directly from GitHub using `bun x` or `pnpm`:
 
 ```bash
 # Set long-lived Linear API key
-bunx github:ImBIOS/belifoa auth set <lin_api_...>
+bun x github:ImBIOS/belifoa#main auth set <lin_api_...>
 
 # Check auth status
-bunx github:ImBIOS/belifoa auth status
+bun x github:ImBIOS/belifoa#main auth status
 
 # List my assigned issues
-bunx github:ImBIOS/belifoa my-issues
+bun x github:ImBIOS/belifoa#main my-issues
 
 # Search issues
-bunx github:ImBIOS/belifoa search "auth bug" --team ENG
+bun x github:ImBIOS/belifoa#main search "auth bug" --team ENG
 
 # Get detailed issue view
-bunx github:ImBIOS/belifoa issue ENG-123
+bun x github:ImBIOS/belifoa#main issue ENG-123
 
 # Create an issue
-bunx github:ImBIOS/belifoa create --team ENG --title "Fix token race condition" --priority 1
+bun x github:ImBIOS/belifoa#main create --team ENG --title "Fix token race condition" --priority 1
 ```
 
 Or install locally in your project using `pnpm`:
@@ -56,14 +56,14 @@ pnpm add github:ImBIOS/belifoa
 ## 🛠️ Interface Options
 
 ### A. MCP Server Setup
-Add Belifoa to your MCP client configuration (e.g. `antigravity`, `claude_desktop_config.json`, or `.cursor/mcp.json`):
+Add Belifoa to your MCP client configuration (e.g. `opencode.jsonc`, `mcp_config.json`, or `.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "belifoa": {
-      "command": "bunx",
-      "args": ["github:ImBIOS/belifoa", "mcp"],
+      "command": "bun",
+      "args": ["x", "github:ImBIOS/belifoa#main", "mcp"],
       "env": {
         "LINEAR_API_KEY": "lin_api_your_key_here"
       }
@@ -74,9 +74,6 @@ Add Belifoa to your MCP client configuration (e.g. `antigravity`, `claude_deskto
 
 ### B. Antigravity Skill
 Include [`skills/linear-agent/SKILL.md`](skills/linear-agent/SKILL.md) in your skills directory.
-
-### C. Antigravity Plugin
-Register the plugin using [`plugin/plugin.json`](plugin/plugin.json).
 
 ---
 
@@ -94,30 +91,12 @@ bun run benchmark/runner.ts
 
 | Scenario | Paradigm / Format | Payload Size | Est. Tokens | Savings (%) |
 |---|---|---|---|---|
-| **Issue Search** | Official Raw Linear MCP (JSON) | 3,120 B | ~821 | **0% (Baseline)** |
-| | Belifoa Compact JSON | 385 B | ~102 | **53%** |
-| | **Belifoa Markdown Table** | **684 B** | **~180** | **78%** |
-| **Issue Detail** | Official Raw Linear MCP (JSON) | 2,890 B | ~761 | **0% (Baseline)** |
-| | Belifoa Compact JSON | 620 B | ~164 | **52%** |
-| | **Belifoa Markdown Card** | **1,020 B** | **~269** | **65%** |
-
----
-
-## 🧪 Testing & Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Run unit tests with Bun
-pnpm test
-
-# Build project with Bun
-pnpm run build
-
-# Run benchmark suite
-pnpm run benchmark
-```
+| **Issue Search** | Official Raw Linear MCP (JSON) | 6,437 B | ~1,694 | **0% (Baseline)** |
+| | Belifoa Compact JSON | 562 B | ~147 | **91%** |
+| | **Belifoa Markdown Table** | **764 B** | **~200** | **88%** |
+| **Issue Detail** | Official Raw Linear MCP (JSON) | 3,369 B | ~887 | **0% (Baseline)** |
+| | Belifoa Compact JSON | 1,317 B | ~347 | **61%** |
+| | **Belifoa Markdown Card** | **1,279 B** | **~337** | **62%** |
 
 ---
 
