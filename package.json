@@ -14,6 +14,7 @@
   },
   "scripts": {
     "build": "bun build ./src/cli/index.ts ./src/mcp/server.ts ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly || true",
+    "prepare": "bun run build",
     "dev": "bun run src/cli/index.ts",
     "mcp": "bun run src/mcp/server.ts",
     "test": "bun test",

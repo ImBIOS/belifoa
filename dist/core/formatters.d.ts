@@ -1,0 +1,22 @@
+import type { LinearIssue, LinearTeam, LinearProject, OutputFormat } from "./types.js";
+export declare function getPriorityLabel(priority: number): string;
+/**
+ * Clean raw GraphQL issue object into a normalized LinearIssue
+ */
+export declare function cleanRawIssue(node: any): LinearIssue;
+/**
+ * Format a list of issues into compact agent-friendly output
+ */
+export declare function formatIssueList(issues: LinearIssue[], format?: OutputFormat): string;
+/**
+ * Format a detailed single issue view
+ */
+export declare function formatIssueDetail(issue: LinearIssue, format?: OutputFormat): string;
+/**
+ * Format teams list
+ */
+export declare function formatTeams(teams: LinearTeam[], format?: OutputFormat): string;
+/**
+ * Format projects list
+ */
+export declare function formatProjects(projects: LinearProject[], format?: OutputFormat): string;
