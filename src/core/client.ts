@@ -1,6 +1,6 @@
-import { loadConfig } from "./config.js";
+import { loadConfig, getActiveProfile } from "./config.js";
 import { cleanRawIssue } from "./formatters.js";
-import type { LinearIssue, LinearTeam, LinearProject, LinearUser } from "./types.js";
+import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization } from "./types.js";
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
 
@@ -8,7 +8,7 @@ export class BelifoaClient {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || loadConfig().apiKey || "";
+    this.apiKey = apiKey || getActiveProfile()?.apiKey || "";
   }
 
   public setApiKey(key: string): void {
@@ -16,12 +16,12 @@ export class BelifoaClient {
   }
 
   public getApiKey(): string {
-    return this.apiKey || loadConfig().apiKey || "";
+    return this.apiKey || getActiveProfile()?.apiKey || "";
   }
 
   private async graphql<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
     if (!this.apiKey) {
-      this.apiKey = loadConfig().apiKey || "";
+      this.apiKey = getActiveProfile()?.apiKey || "";
     }
 
     if (!this.apiKey) {
@@ -72,6 +72,23 @@ export class BelifoaClient {
     `;
     const data = await this.graphql<{ viewer: LinearUser }>(query);
     return data.viewer;
+  }
+
+  /**
+   * Get current workspace organization info
+   */
+  async getOrganization(): Promise<LinearOrganization> {
+    const query = `
+      query GetOrg {
+        organization {
+          id
+          name
+          urlKey
+        }
+      }
+    `;
+    const data = await this.graphql<{ organization: LinearOrganization }>(query);
+    return data.organization;
   }
 
   /**

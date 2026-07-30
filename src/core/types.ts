@@ -4,6 +4,12 @@ export interface LinearUser {
   email?: string;
 }
 
+export interface LinearOrganization {
+  id: string;
+  name: string;
+  urlKey: string;
+}
+
 export interface LinearState {
   id: string;
   name: string;
@@ -51,8 +57,16 @@ export interface LinearIssue {
 
 export type OutputFormat = "markdown" | "compact_json" | "raw_json";
 
-export interface BelifoaConfig {
-  apiKey?: string;
+export interface AuthProfile {
+  name: string; // Profile identifier, e.g., "zuzu", "myrehat", "orderly"
+  apiKey: string;
+  organization?: LinearOrganization;
   defaultTeam?: string;
+  createdAt?: string;
+}
+
+export interface BelifoaConfig {
+  activeProfile?: string;
+  profiles: Record<string, AuthProfile>;
   defaultFormat?: OutputFormat;
 }

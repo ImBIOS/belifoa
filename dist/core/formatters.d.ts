@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearTeam, LinearProject, OutputFormat } from "./types.js";
+import type { LinearIssue, LinearTeam, LinearProject, OutputFormat, AuthProfile } from "./types.js";
 export declare function getPriorityLabel(priority: number): string;
 /**
  * Clean raw GraphQL issue object into a normalized LinearIssue
@@ -20,3 +20,10 @@ export declare function formatTeams(teams: LinearTeam[], format?: OutputFormat):
  * Format projects list
  */
 export declare function formatProjects(projects: LinearProject[], format?: OutputFormat): string;
+/**
+ * Format list of saved authentication profiles & workspaces
+ */
+export declare function formatProfiles(profiles: Array<{
+    profile: AuthProfile;
+    isActive: boolean;
+}>, format?: OutputFormat): string;

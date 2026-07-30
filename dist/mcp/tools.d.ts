@@ -7,6 +7,37 @@ export declare const authStatusToolSchema: {
         properties: {};
     };
 };
+export declare const authListToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {
+            format: {
+                type: string;
+                enum: string[];
+                default: string;
+            };
+        };
+    };
+};
+export declare const authSwitchToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {
+            profileName: {
+                type: string;
+                description: string;
+            };
+            teamKey: {
+                type: string;
+                description: string;
+            };
+        };
+    };
+};
 export declare const setApiKeyToolSchema: {
     name: string;
     description: string;
@@ -14,6 +45,14 @@ export declare const setApiKeyToolSchema: {
         type: string;
         properties: {
             apiKey: {
+                type: string;
+                description: string;
+            };
+            profileName: {
+                type: string;
+                description: string;
+            };
+            teamKey: {
                 type: string;
                 description: string;
             };

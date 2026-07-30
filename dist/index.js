@@ -58,29 +58,102 @@ function loadConfig() {
       fileConfig = JSON.parse(content);
     } catch {}
   }
-  const apiKey = process.env.LINEAR_API_KEY || fileConfig.apiKey;
-  const defaultTeam = process.env.BELIFOA_DEFAULT_TEAM || fileConfig.defaultTeam;
-  const defaultFormat = process.env.BELIFOA_FORMAT || fileConfig.defaultFormat || "markdown";
+  const profiles = fileConfig.profiles || {};
+  if (fileConfig.apiKey && !profiles["default"]) {
+    profiles["default"] = {
+      name: "default",
+      apiKey: fileConfig.apiKey,
+      defaultTeam: fileConfig.defaultTeam
+    };
+  }
+  let activeProfile = fileConfig.activeProfile || (Object.keys(profiles)[0] ?? "default");
   return {
-    apiKey,
-    defaultTeam,
-    defaultFormat
+    activeProfile,
+    profiles,
+    defaultFormat: process.env.BELIFOA_FORMAT || fileConfig.defaultFormat || "markdown"
   };
 }
 function saveConfig(config) {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
   }
-  const current = loadConfig();
-  const updated = { ...current, ...config };
-  writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), "utf-8");
+  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
 }
-function resolveApiKey() {
+function getActiveProfile() {
   const config = loadConfig();
-  if (config.apiKey) {
-    return config.apiKey;
+  const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
+  const envProfileName = process.env.BELIFOA_PROFILE;
+  if (envProfileName && config.profiles[envProfileName]) {
+    const profile = { ...config.profiles[envProfileName] };
+    if (envKey)
+      profile.apiKey = envKey;
+    if (process.env.BELIFOA_DEFAULT_TEAM)
+      profile.defaultTeam = process.env.BELIFOA_DEFAULT_TEAM;
+    return profile;
   }
-  throw new Error("Linear API key missing! Set LINEAR_API_KEY environment variable or run `belifoa auth set <lin_api_...>`");
+  if (envKey) {
+    return {
+      name: "env",
+      apiKey: envKey,
+      defaultTeam: process.env.BELIFOA_DEFAULT_TEAM
+    };
+  }
+  const activeName = config.activeProfile || "default";
+  return config.profiles[activeName] || null;
+}
+function addProfile(name, apiKey, organization, defaultTeam) {
+  const config = loadConfig();
+  const profile = {
+    name,
+    apiKey,
+    organization,
+    defaultTeam: defaultTeam || config.profiles[name]?.defaultTeam,
+    createdAt: new Date().toISOString()
+  };
+  config.profiles[name] = profile;
+  if (!config.activeProfile || Object.keys(config.profiles).length === 1) {
+    config.activeProfile = name;
+  }
+  saveConfig(config);
+  return profile;
+}
+function switchProfile(name) {
+  const config = loadConfig();
+  if (!config.profiles[name]) {
+    throw new Error(`Auth profile '${name}' does not exist. Run \`belifoa auth add ${name} <key>\` to create it.`);
+  }
+  config.activeProfile = name;
+  saveConfig(config);
+  return config.profiles[name];
+}
+function switchDefaultTeam(teamKey, profileName) {
+  const config = loadConfig();
+  const targetName = profileName || config.activeProfile || "default";
+  if (!config.profiles[targetName]) {
+    throw new Error(`Auth profile '${targetName}' not found.`);
+  }
+  config.profiles[targetName].defaultTeam = teamKey.toUpperCase();
+  saveConfig(config);
+  return config.profiles[targetName];
+}
+function removeProfile(name) {
+  const config = loadConfig();
+  if (!config.profiles[name]) {
+    throw new Error(`Auth profile '${name}' not found.`);
+  }
+  delete config.profiles[name];
+  if (config.activeProfile === name) {
+    config.activeProfile = Object.keys(config.profiles)[0] ?? undefined;
+  }
+  saveConfig(config);
+}
+function listProfiles() {
+  const config = loadConfig();
+  const activeName = getActiveProfile()?.name || config.activeProfile;
+  return Object.values(config.profiles).map((p) => ({
+    profile: p,
+    isActive: p.name === activeName
+  }));
 }
 var CONFIG_DIR, CONFIG_FILE;
 var init_config = __esm(() => {
@@ -228,6 +301,34 @@ function formatProjects(projects, format = "markdown") {
   return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join(`
 `);
 }
+function formatProfiles(profiles, format = "markdown") {
+  if (format === "raw_json")
+    return JSON.stringify(profiles, null, 2);
+  if (format === "compact_json") {
+    return JSON.stringify(profiles.map(({ profile, isActive }) => ({
+      profile: profile.name,
+      org: profile.organization?.name || "N/A",
+      active: isActive,
+      defaultTeam: profile.defaultTeam || "N/A"
+    })));
+  }
+  if (profiles.length === 0)
+    return "No authentication profiles saved.";
+  const rows = profiles.map(({ profile, isActive }) => {
+    const activeMarker = isActive ? "\u2705 **Active**" : "-";
+    const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
+    const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
+    return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+  });
+  return [
+    "### \uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):",
+    "",
+    "| Profile | Workspace / Org | Default Team | API Key | Status |",
+    "|---|---|---|---|---|",
+    ...rows
+  ].join(`
+`);
+}
 var PRIORITY_LABELS;
 var init_formatters = __esm(() => {
   PRIORITY_LABELS = {
@@ -243,17 +344,17 @@ var init_formatters = __esm(() => {
 class BelifoaClient {
   apiKey;
   constructor(apiKey) {
-    this.apiKey = apiKey || loadConfig().apiKey || "";
+    this.apiKey = apiKey || getActiveProfile()?.apiKey || "";
   }
   setApiKey(key) {
     this.apiKey = key;
   }
   getApiKey() {
-    return this.apiKey || loadConfig().apiKey || "";
+    return this.apiKey || getActiveProfile()?.apiKey || "";
   }
   async graphql(query, variables = {}) {
     if (!this.apiKey) {
-      this.apiKey = loadConfig().apiKey || "";
+      this.apiKey = getActiveProfile()?.apiKey || "";
     }
     if (!this.apiKey) {
       throw new Error("Linear API Key is missing! Set LINEAR_API_KEY environment variable, run `bun x github:ImBIOS/belifoa#main auth set <key>`, or call `linear_set_api_key` tool.");
@@ -291,6 +392,19 @@ class BelifoaClient {
     `;
     const data = await this.graphql(query);
     return data.viewer;
+  }
+  async getOrganization() {
+    const query = `
+      query GetOrg {
+        organization {
+          id
+          name
+          urlKey
+        }
+      }
+    `;
+    const data = await this.graphql(query);
+    return data.organization;
   }
   async searchIssues(queryStr, options = {}) {
     const limit = options.limit || 15;
@@ -519,6 +633,8 @@ var init_client = __esm(() => {
 
 // src/mcp/tools.ts
 function getAuthGuidanceMessage() {
+  const profiles = listProfiles();
+  const profileListStr = profiles.length > 0 ? `Saved Profiles: ${profiles.map((p) => p.profile.name + (p.isActive ? " (Active)" : "")).join(", ")}` : "No profiles saved yet.";
   return [
     "\uD83D\uDD12 **Linear Authentication Required**",
     "",
@@ -526,9 +642,12 @@ function getAuthGuidanceMessage() {
     "Linear authentication is currently missing or invalid.",
     "Please inform the user interactively in chat that they need to provide a Linear Personal API Key.",
     "",
+    `_Current Status_: ${profileListStr}`,
+    "",
     "**Options for User**:",
     "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `linear_set_api_key`.",
-    "2. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#main auth set <lin_api_...>` in your terminal.",
+    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'zuzu' })`.",
+    "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#main auth add <profile-name> <lin_api_...>` in your terminal.",
     "",
     "_To create a Personal API Key, go to Linear Settings -> Account -> API -> Personal API keys._"
   ].join(`
@@ -540,34 +659,77 @@ async function handleToolCall(name, args, client) {
     switch (name) {
       case "linear_auth_status": {
         try {
+          const active = getActiveProfile();
           const me = await client.getMe();
+          const org = await client.getOrganization();
           return {
             content: [
               {
                 type: "text",
-                text: `\u2705 Authenticated as: **${me.name}** (${me.email || me.id})`
+                text: [
+                  `\u2705 **Active Profile**: \`${active?.name || "default"}\``,
+                  `- **Workspace / Org**: ${org.name} (\`${org.urlKey}\`)`,
+                  `- **User**: ${me.name} (${me.email || me.id})`,
+                  `- **Default Team**: ${active?.defaultTeam || "None"}`
+                ].join(`
+`)
               }
             ]
           };
         } catch {
-          return {
-            content: [{ type: "text", text: getAuthGuidanceMessage() }]
-          };
+          return { content: [{ type: "text", text: getAuthGuidanceMessage() }] };
         }
+      }
+      case "linear_auth_list": {
+        const profiles = listProfiles();
+        return { content: [{ type: "text", text: formatProfiles(profiles, format) }] };
+      }
+      case "linear_auth_switch": {
+        let msgParts = [];
+        if (args.profileName) {
+          const profile = switchProfile(args.profileName);
+          client.setApiKey(profile.apiKey);
+          msgParts.push(`Switched active profile to **'${profile.name}'**`);
+        }
+        if (args.teamKey) {
+          const profile = switchDefaultTeam(args.teamKey);
+          msgParts.push(`Set default team for profile **'${profile.name}'** to **'${profile.defaultTeam}'**`);
+        }
+        if (msgParts.length === 0) {
+          throw new Error("Specify either profileName or teamKey to switch.");
+        }
+        const org = await client.getOrganization();
+        return {
+          content: [
+            {
+              type: "text",
+              text: `\u2705 ${msgParts.join(" and ")}.
+Workspace: **${org.name}** (\`${org.urlKey}\`)`
+            }
+          ]
+        };
       }
       case "linear_set_api_key": {
         if (!args.apiKey || typeof args.apiKey !== "string") {
           throw new Error("apiKey parameter is required.");
         }
-        saveConfig({ apiKey: args.apiKey });
+        const profileName = args.profileName || "default";
+        const tempClient = new BelifoaClient(args.apiKey);
+        const org = await tempClient.getOrganization();
+        const me = await tempClient.getMe();
+        const profile = addProfile(profileName, args.apiKey, org, args.teamKey);
         client.setApiKey(args.apiKey);
-        const me = await client.getMe();
         return {
           content: [
             {
               type: "text",
-              text: `\u2705 Linear Personal API Key verified & saved successfully!
-Authenticated as: **${me.name}** (${me.email || me.id})`
+              text: [
+                `\u2705 Saved & activated Linear API Key for profile **'${profile.name}'**!`,
+                `- **Workspace / Org**: ${org.name} (\`${org.urlKey}\`)`,
+                `- **User**: ${me.name} (${me.email || me.id})`,
+                `- **Default Team**: ${profile.defaultTeam || "None"}`
+              ].join(`
+`)
             }
           ]
         };
@@ -577,8 +739,10 @@ Authenticated as: **${me.name}** (${me.email || me.id})`
         return { content: [{ type: "text", text: formatIssueDetail(issue, format) }] };
       }
       case "linear_search_issues": {
+        const active = getActiveProfile();
+        const teamKey = args.teamKey || active?.defaultTeam;
         const issues = await client.searchIssues(args.query, {
-          teamKey: args.teamKey,
+          teamKey,
           limit: args.limit
         });
         return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
@@ -588,12 +752,14 @@ Authenticated as: **${me.name}** (${me.email || me.id})`
         return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
       }
       case "linear_manage_issue": {
+        const active = getActiveProfile();
         if (args.action === "create") {
-          if (!args.teamKey || !args.title) {
-            throw new Error("teamKey and title are required when action is 'create'.");
+          const team = args.teamKey || active?.defaultTeam;
+          if (!team || !args.title) {
+            throw new Error("teamKey and title are required when action is 'create'. (Set default team or pass teamKey)");
           }
           const created = await client.createIssue({
-            teamIdOrKey: args.teamKey,
+            teamIdOrKey: team,
             title: args.title,
             description: args.description,
             priority: args.priority
@@ -648,28 +814,49 @@ ${formatIssueDetail(updated, format)}` }] };
     throw err;
   }
 }
-var authStatusToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, getTeamsAndProjectsToolSchema;
+var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, getTeamsAndProjectsToolSchema;
 var init_tools = __esm(() => {
+  init_client();
   init_config();
   init_formatters();
   authStatusToolSchema = {
     name: "linear_auth_status",
-    description: "Check if Linear authentication is valid. Call this tool to verify authentication before performing actions.",
+    description: "Check current active profile, workspace organization, and viewer info.",
     inputSchema: {
       type: "object",
       properties: {}
     }
   };
-  setApiKeyToolSchema = {
-    name: "linear_set_api_key",
-    description: "Set and validate a long-lived Linear Personal API Key interactively when prompted by the user.",
+  authListToolSchema = {
+    name: "linear_auth_list",
+    description: "List all saved Linear authentication profiles and workspaces.",
     inputSchema: {
       type: "object",
       properties: {
-        apiKey: {
-          type: "string",
-          description: "Linear Personal API Key (starts with 'lin_api_')"
-        }
+        format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" }
+      }
+    }
+  };
+  authSwitchToolSchema = {
+    name: "linear_auth_switch",
+    description: "Switch active authentication profile, workspace, or default team.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'zuzu', 'myrehat')" },
+        teamKey: { type: "string", description: "Optional default team key to activate (e.g. 'ENG')" }
+      }
+    }
+  };
+  setApiKeyToolSchema = {
+    name: "linear_set_api_key",
+    description: "Add or set a long-lived Linear Personal API Key for a profile/workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        apiKey: { type: "string", description: "Linear Personal API Key (starts with 'lin_api_')" },
+        profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'zuzu', 'myrehat'). Defaults to 'default'." },
+        teamKey: { type: "string", description: "Optional default team key (e.g., 'ENG')" }
       },
       required: ["apiKey"]
     }
@@ -736,7 +923,7 @@ var init_tools = __esm(() => {
           description: "Action to perform"
         },
         issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
-        teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG)" },
+        teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
         description: { type: "string", description: "Description text" },
         priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
@@ -752,7 +939,7 @@ var init_tools = __esm(() => {
   };
   getTeamsAndProjectsToolSchema = {
     name: "linear_get_teams_and_projects",
-    description: "Get list of available Linear teams and projects.",
+    description: "Get list of available Linear teams and projects for the active workspace.",
     inputSchema: {
       type: "object",
       properties: {
@@ -772,23 +959,31 @@ init_formatters();
 init_client();
 init_tools();
 export {
+  switchProfile,
+  switchDefaultTeam,
   setApiKeyToolSchema,
   searchIssuesToolSchema,
   saveConfig,
-  resolveApiKey,
+  removeProfile,
   manageIssueToolSchema,
   loadConfig,
+  listProfiles,
   handleToolCall,
   getTeamsAndProjectsToolSchema,
   getPriorityLabel,
   getMyIssuesToolSchema,
   getIssueToolSchema,
   getAuthGuidanceMessage,
+  getActiveProfile,
   formatTeams,
   formatProjects,
+  formatProfiles,
   formatIssueList,
   formatIssueDetail,
   cleanRawIssue,
+  authSwitchToolSchema,
   authStatusToolSchema,
+  authListToolSchema,
+  addProfile,
   BelifoaClient
 };

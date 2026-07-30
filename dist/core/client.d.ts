@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearTeam, LinearProject, LinearUser } from "./types.js";
+import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization } from "./types.js";
 export declare class BelifoaClient {
     private apiKey;
     constructor(apiKey?: string);
@@ -9,6 +9,10 @@ export declare class BelifoaClient {
      * Get authenticated user info
      */
     getMe(): Promise<LinearUser>;
+    /**
+     * Get current workspace organization info
+     */
+    getOrganization(): Promise<LinearOrganization>;
     /**
      * Search issues with query string or filters
      */

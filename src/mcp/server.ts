@@ -5,6 +5,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { BelifoaClient } from "../core/client.js";
 import {
   authStatusToolSchema,
+  authListToolSchema,
+  authSwitchToolSchema,
   setApiKeyToolSchema,
   getIssueToolSchema,
   searchIssuesToolSchema,
@@ -33,6 +35,8 @@ export async function startMcpServer() {
     return {
       tools: [
         authStatusToolSchema,
+        authListToolSchema,
+        authSwitchToolSchema,
         setApiKeyToolSchema,
         getIssueToolSchema,
         searchIssuesToolSchema,

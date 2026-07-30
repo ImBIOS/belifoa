@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearTeam, LinearProject, OutputFormat } from "./types.js";
+import type { LinearIssue, LinearTeam, LinearProject, OutputFormat, AuthProfile } from "./types.js";
 
 const PRIORITY_LABELS: Record<number, string> = {
   0: "None",
@@ -176,4 +176,41 @@ export function formatProjects(projects: LinearProject[], format: OutputFormat =
     return `| ${p.name} | ${p.state || "Active"} | ${progStr} |`;
   });
   return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join("\n");
+}
+
+/**
+ * Format list of saved authentication profiles & workspaces
+ */
+export function formatProfiles(
+  profiles: Array<{ profile: AuthProfile; isActive: boolean }>,
+  format: OutputFormat = "markdown"
+): string {
+  if (format === "raw_json") return JSON.stringify(profiles, null, 2);
+  if (format === "compact_json") {
+    return JSON.stringify(
+      profiles.map(({ profile, isActive }) => ({
+        profile: profile.name,
+        org: profile.organization?.name || "N/A",
+        active: isActive,
+        defaultTeam: profile.defaultTeam || "N/A",
+      }))
+    );
+  }
+
+  if (profiles.length === 0) return "No authentication profiles saved.";
+
+  const rows = profiles.map(({ profile, isActive }) => {
+    const activeMarker = isActive ? "✅ **Active**" : "-";
+    const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
+    const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
+    return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+  });
+
+  return [
+    "### 🔐 Saved Linear Authentication Profiles (Workspaces):",
+    "",
+    "| Profile | Workspace / Org | Default Team | API Key | Status |",
+    "|---|---|---|---|---|",
+    ...rows,
+  ].join("\n");
 }
