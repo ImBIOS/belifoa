@@ -1,0 +1,4 @@
+{
+  "name": "belifoa-plugin",
+  "description": "Better Linear for Agent (Belifoa) plugin bundling Linear agent skills, MCP tools, and git-context hooks."
+}

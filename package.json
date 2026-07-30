@@ -1,0 +1,43 @@
+{
+  "name": "belifoa",
+  "version": "0.1.0",
+  "description": "Better Linear for Agent - Auth, Compact Context, MCP, Skills, Plugins & Hooks",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "belifoa": "./dist/cli/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImBIOS/belifoa.git"
+  },
+  "scripts": {
+    "build": "bun build ./src/cli/index.ts ./src/mcp/server.ts ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly || true",
+    "dev": "bun run src/cli/index.ts",
+    "mcp": "bun run src/mcp/server.ts",
+    "test": "bun test",
+    "benchmark": "bun run benchmark/runner.ts"
+  },
+  "keywords": [
+    "linear",
+    "mcp",
+    "agent",
+    "antigravity",
+    "skills",
+    "plugins",
+    "hooks"
+  ],
+  "author": "ImBIOS",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.1.0",
+    "commander": "^13.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
