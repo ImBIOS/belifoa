@@ -5,7 +5,7 @@ export declare function getPriorityLabel(priority: number): string;
  */
 export declare function cleanRawIssue(node: any): LinearIssue;
 /**
- * Format a list of issues into compact agent-friendly output
+ * Format a list of issues into compact agent or clean CLI terminal output
  */
 export declare function formatIssueList(issues: LinearIssue[], format?: OutputFormat): string;
 /**

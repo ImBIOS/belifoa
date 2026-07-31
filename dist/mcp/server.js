@@ -13183,6 +13183,9 @@ var init_config = __esm(() => {
 function getPriorityLabel(priority) {
   return PRIORITY_LABELS[priority] || "None";
 }
+function pad(str, length) {
+  return (str + " ".repeat(length)).substring(0, length);
+}
 function cleanRawIssue(node) {
   const priority = node.priority ?? 0;
   return {
@@ -13208,7 +13211,7 @@ function cleanRawIssue(node) {
     })) : undefined
   };
 }
-function formatIssueList(issues, format = "markdown") {
+function formatIssueList(issues, format = "cli_table") {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
   }
@@ -13225,21 +13228,47 @@ function formatIssueList(issues, format = "markdown") {
   if (issues.length === 0) {
     return "No issues found.";
   }
-  const rows = issues.map((i) => {
-    const assigneeStr = i.assignee ? `@${i.assignee}` : "-";
-    const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
-    return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
-  });
+  if (format === "markdown") {
+    const rows2 = issues.map((i) => {
+      const assigneeStr = i.assignee ? `@${i.assignee}` : "-";
+      const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
+      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
+    });
+    return [
+      `Found ${issues.length} issue(s):`,
+      "",
+      "| ID | Title | Status | Priority | Assignee | Labels |",
+      "|---|---|---|---|---|---|",
+      ...rows2
+    ].join(`
+`);
+  }
+  const rows = issues.map((i) => ({
+    id: i.identifier,
+    title: i.title.length > 55 ? i.title.substring(0, 52) + "..." : i.title,
+    status: i.status,
+    priority: i.priorityLabel || "None",
+    assignee: i.assignee ? `@${i.assignee}` : "-",
+    labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-"
+  }));
+  const maxId = Math.max(7, ...rows.map((r) => r.id.length));
+  const maxTitle = Math.max(25, ...rows.map((r) => r.title.length));
+  const maxStatus = Math.max(10, ...rows.map((r) => r.status.length));
+  const maxPriority = Math.max(10, ...rows.map((r) => r.priority.length));
+  const maxAssignee = Math.max(10, ...rows.map((r) => r.assignee.length));
+  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}`;
+  const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}`;
+  const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`);
   return [
-    `Found ${issues.length} issue(s):`,
+    `\x1B[1mFound ${issues.length} issue(s):\x1B[0m`,
     "",
-    "| ID | Title | Status | Priority | Assignee | Labels |",
-    "|---|---|---|---|---|---|",
-    ...rows
+    `\x1B[1m${header}\x1B[0m`,
+    `\x1B[2m${divider}\x1B[0m`,
+    ...body
   ].join(`
 `);
 }
-function formatIssueDetail(issue2, format = "markdown") {
+function formatIssueDetail(issue2, format = "cli_table") {
   if (format === "raw_json") {
     return JSON.stringify(issue2, null, 2);
   }
@@ -13266,60 +13295,126 @@ function formatIssueDetail(issue2, format = "markdown") {
     Object.keys(clean).forEach((key) => clean[key] === undefined && delete clean[key]);
     return JSON.stringify(clean);
   }
+  if (format === "markdown") {
+    const lines2 = [
+      `# [${issue2.identifier}] ${issue2.title}`,
+      "",
+      `- **Status**: ${issue2.status}`,
+      `- **Priority**: ${issue2.priorityLabel}`,
+      `- **Assignee**: ${issue2.assignee ? `@${issue2.assignee}` : "Unassigned"}`,
+      `- **Team**: ${issue2.teamKey || "N/A"}`
+    ];
+    if (issue2.project)
+      lines2.push(`- **Project**: ${issue2.project}`);
+    if (issue2.labels && issue2.labels.length > 0)
+      lines2.push(`- **Labels**: ${issue2.labels.join(", ")}`);
+    if (issue2.url)
+      lines2.push(`- **URL**: ${issue2.url}`);
+    if (issue2.description) {
+      lines2.push("", "## Description", "", issue2.description);
+    }
+    if (issue2.comments && issue2.comments.length > 0) {
+      lines2.push("", `## Comments (${issue2.comments.length})`, "");
+      issue2.comments.forEach((c) => {
+        const authorStr = c.user?.name ? `@${c.user.name}` : "User";
+        lines2.push(`> **${authorStr}** (${c.createdAt}):`, `> ${c.body.replace(/\n/g, `
+> `)}`, "");
+      });
+    }
+    return lines2.join(`
+`);
+  }
   const lines = [
-    `# [${issue2.identifier}] ${issue2.title}`,
-    "",
-    `- **Status**: ${issue2.status}`,
-    `- **Priority**: ${issue2.priorityLabel}`,
-    `- **Assignee**: ${issue2.assignee ? `@${issue2.assignee}` : "Unassigned"}`,
-    `- **Team**: ${issue2.teamKey || "N/A"}`
+    `\x1B[1m\x1B[36m[${issue2.identifier}]\x1B[0m \x1B[1m${issue2.title}\x1B[0m`,
+    `\x1B[2m${"\u2500".repeat(60)}\x1B[0m`,
+    `  \x1B[1mStatus\x1B[0m:    \x1B[32m${issue2.status}\x1B[0m`,
+    `  \x1B[1mPriority\x1B[0m:  ${issue2.priorityLabel}`,
+    `  \x1B[1mAssignee\x1B[0m:  ${issue2.assignee ? `@${issue2.assignee}` : "Unassigned"}`,
+    `  \x1B[1mTeam\x1B[0m:      ${issue2.teamKey || "N/A"}`
   ];
   if (issue2.project)
-    lines.push(`- **Project**: ${issue2.project}`);
+    lines.push(`  \x1B[1mProject\x1B[0m:   ${issue2.project}`);
   if (issue2.labels && issue2.labels.length > 0)
-    lines.push(`- **Labels**: ${issue2.labels.join(", ")}`);
+    lines.push(`  \x1B[1mLabels\x1B[0m:    ${issue2.labels.join(", ")}`);
   if (issue2.url)
-    lines.push(`- **URL**: ${issue2.url}`);
+    lines.push(`  \x1B[1mURL\x1B[0m:       \x1B[4m${issue2.url}\x1B[0m`);
   if (issue2.description) {
-    lines.push("", "## Description", "", issue2.description);
+    lines.push("", `\x1B[1mDescription:\x1B[0m`, issue2.description);
   }
   if (issue2.comments && issue2.comments.length > 0) {
-    lines.push("", `## Comments (${issue2.comments.length})`, "");
+    lines.push("", `\x1B[1mComments (${issue2.comments.length}):\x1B[0m`);
     issue2.comments.forEach((c) => {
       const authorStr = c.user?.name ? `@${c.user.name}` : "User";
-      lines.push(`> **${authorStr}** (${c.createdAt}):`, `> ${c.body.replace(/\n/g, `
-> `)}`, "");
+      lines.push(`  \uD83D\uDCAC \x1B[1m${authorStr}\x1B[0m \x1B[2m(${c.createdAt})\x1B[0m`, `     ${c.body.replace(/\n/g, `
+     `)}`);
     });
   }
   return lines.join(`
 `);
 }
-function formatTeams(teams, format = "markdown") {
+function formatTeams(teams, format = "cli_table") {
   if (format === "raw_json")
     return JSON.stringify(teams, null, 2);
   if (format === "compact_json")
     return JSON.stringify(teams.map((t) => ({ key: t.key, name: t.name, id: t.id })));
   if (teams.length === 0)
     return "No teams found.";
-  const rows = teams.map((t) => `| **${t.key}** | ${t.name} | \`${t.id}\` |`);
-  return ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join(`
+  if (format === "markdown") {
+    const rows = teams.map((t) => `| **${t.key}** | ${t.name} | \`${t.id}\` |`);
+    return ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join(`
+`);
+  }
+  const maxKey = Math.max(6, ...teams.map((t) => t.key.length));
+  const maxName = Math.max(20, ...teams.map((t) => t.name.length));
+  const maxId = Math.max(10, ...teams.map((t) => t.id.length));
+  const header = `  ${pad("KEY", maxKey)}  ${pad("NAME", maxName)}  ${pad("ID", maxId)}`;
+  const divider = `  ${"\u2500".repeat(maxKey)}  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxId)}`;
+  const body = teams.map((t) => `  \x1B[1m\x1B[36m${pad(t.key, maxKey)}\x1B[0m  ${pad(t.name, maxName)}  \x1B[2m${pad(t.id, maxId)}\x1B[0m`);
+  return [
+    `\x1B[1m\uD83D\uDC65 Linear Teams:\x1B[0m`,
+    "",
+    `\x1B[1m${header}\x1B[0m`,
+    `\x1B[2m${divider}\x1B[0m`,
+    ...body
+  ].join(`
 `);
 }
-function formatProjects(projects, format = "markdown") {
+function formatProjects(projects, format = "cli_table") {
   if (format === "raw_json")
     return JSON.stringify(projects, null, 2);
   if (format === "compact_json")
     return JSON.stringify(projects.map((p) => ({ name: p.name, state: p.state, progress: p.progress ? `${Math.round(p.progress * 100)}%` : undefined })));
   if (projects.length === 0)
     return "No projects found.";
-  const rows = projects.map((p) => {
-    const progStr = p.progress !== undefined ? `${Math.round(p.progress * 100)}%` : "N/A";
-    return `| ${p.name} | ${p.state || "Active"} | ${progStr} |`;
-  });
-  return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join(`
+  if (format === "markdown") {
+    const rows2 = projects.map((p) => {
+      const progStr = p.progress !== undefined ? `${Math.round(p.progress * 100)}%` : "N/A";
+      return `| ${p.name} | ${p.state || "Active"} | ${progStr} |`;
+    });
+    return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows2].join(`
+`);
+  }
+  const rows = projects.map((p) => ({
+    name: p.name,
+    state: p.state || "Active",
+    progress: p.progress !== undefined ? `${Math.round(p.progress * 100)}%` : "N/A"
+  }));
+  const maxName = Math.max(25, ...rows.map((r) => r.name.length));
+  const maxState = Math.max(10, ...rows.map((r) => r.state.length));
+  const maxProg = Math.max(10, ...rows.map((r) => r.progress.length));
+  const header = `  ${pad("PROJECT NAME", maxName)}  ${pad("STATE", maxState)}  ${pad("PROGRESS", maxProg)}`;
+  const divider = `  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxState)}  ${"\u2500".repeat(maxProg)}`;
+  const body = rows.map((r) => `  \x1B[1m${pad(r.name, maxName)}\x1B[0m  \x1B[32m${pad(r.state, maxState)}\x1B[0m  ${pad(r.progress, maxProg)}`);
+  return [
+    `\x1B[1m\uD83D\uDCC1 Linear Projects:\x1B[0m`,
+    "",
+    `\x1B[1m${header}\x1B[0m`,
+    `\x1B[2m${divider}\x1B[0m`,
+    ...body
+  ].join(`
 `);
 }
-function formatProfiles(profiles, format = "markdown") {
+function formatProfiles(profiles, format = "cli_table") {
   if (format === "raw_json")
     return JSON.stringify(profiles, null, 2);
   if (format === "compact_json") {
@@ -13331,19 +13426,49 @@ function formatProfiles(profiles, format = "markdown") {
     })));
   }
   if (profiles.length === 0)
-    return "No authentication profiles saved.";
+    return "\u274C No authentication profiles saved.";
+  if (format === "markdown") {
+    const rows2 = profiles.map(({ profile, isActive }) => {
+      const activeMarker = isActive ? "\u2705 **Active**" : "-";
+      const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
+      const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
+      return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+    });
+    return [
+      "### \uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):",
+      "",
+      "| Profile | Workspace / Org | Default Team | API Key | Status |",
+      "|---|---|---|---|---|",
+      ...rows2
+    ].join(`
+`);
+  }
   const rows = profiles.map(({ profile, isActive }) => {
-    const activeMarker = isActive ? "\u2705 **Active**" : "-";
-    const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
-    const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
-    return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+    const status = isActive ? "\u2705 Active" : "   -   ";
+    const name = profile.name;
+    const org = profile.organization?.name ? `${profile.organization.name} (${profile.organization.urlKey})` : "N/A";
+    const team = profile.defaultTeam || "None";
+    const key = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
+    return { status, name, org, team, key, isActive };
+  });
+  const maxStatus = Math.max(8, ...rows.map((r) => r.status.length));
+  const maxName = Math.max(10, ...rows.map((r) => r.name.length));
+  const maxOrg = Math.max(24, ...rows.map((r) => r.org.length));
+  const maxTeam = Math.max(12, ...rows.map((r) => r.team.length));
+  const maxKey = Math.max(13, ...rows.map((r) => r.key.length));
+  const header = `  ${pad("STATUS", maxStatus)}  ${pad("PROFILE", maxName)}  ${pad("WORKSPACE / ORGANIZATION", maxOrg)}  ${pad("DEFAULT TEAM", maxTeam)}  ${pad("API KEY", maxKey)}`;
+  const divider = `  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxOrg)}  ${"\u2500".repeat(maxTeam)}  ${"\u2500".repeat(maxKey)}`;
+  const body = rows.map((r) => {
+    const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
+    return r.isActive ? `\x1B[1m\x1B[32m${rowStr}\x1B[0m` : rowStr;
   });
   return [
-    "### \uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):",
+    "\x1B[1m\x1B[36m\uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):\x1B[0m",
     "",
-    "| Profile | Workspace / Org | Default Team | API Key | Status |",
-    "|---|---|---|---|---|",
-    ...rows
+    `\x1B[1m${header}\x1B[0m`,
+    `\x1B[2m${divider}\x1B[0m`,
+    ...body,
+    ""
   ].join(`
 `);
 }

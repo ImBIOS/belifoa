@@ -55,7 +55,7 @@ export interface LinearIssue {
   comments?: LinearComment[];
 }
 
-export type OutputFormat = "markdown" | "compact_json" | "raw_json";
+export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";
 
 export interface AuthProfile {
   name: string; // Profile identifier, e.g., "zuzu", "myrehat", "orderly"

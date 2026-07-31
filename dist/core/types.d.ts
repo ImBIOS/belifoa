@@ -48,7 +48,7 @@ export interface LinearIssue {
     updatedAt?: string;
     comments?: LinearComment[];
 }
-export type OutputFormat = "markdown" | "compact_json" | "raw_json";
+export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";
 export interface AuthProfile {
     name: string;
     apiKey: string;

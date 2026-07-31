@@ -69,7 +69,7 @@ authCmd
 authCmd
   .command("list")
   .description("List all saved authentication profiles and workspaces")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format (cli_table|markdown|compact_json|raw_json)", "cli_table")
   .action((options) => {
     const profiles = listProfiles();
     console.log(formatProfiles(profiles, options.format as OutputFormat));
@@ -130,7 +130,7 @@ const workspaceCmd = program.command("workspace").description("Manage and switch
 workspaceCmd
   .command("list")
   .description("List available workspaces")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action((options) => {
     const profiles = listProfiles();
     console.log(formatProfiles(profiles, options.format as OutputFormat));
@@ -155,7 +155,7 @@ const teamCmd = program.command("team").description("Manage and switch between d
 teamCmd
   .command("list")
   .description("List teams in current active workspace")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
       const client = new BelifoaClient();
@@ -184,7 +184,7 @@ teamCmd
 program
   .command("my-issues")
   .description("List issues assigned to you")
-  .option("-f, --format <format>", "Output format (markdown|compact_json|raw_json)", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Number of issues", "20")
   .action(async (options) => {
     try {
@@ -202,7 +202,7 @@ program
   .command("search <query>")
   .description("Search Linear issues")
   .option("-t, --team <key>", "Filter by team key (e.g., ENG)")
-  .option("-f, --format <format>", "Output format (markdown|compact_json|raw_json)", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Limit results", "15")
   .action(async (query: string, options) => {
     try {
@@ -224,7 +224,7 @@ program
 program
   .command("issue <id>")
   .description("Get details for a specific issue (e.g., ENG-123)")
-  .option("-f, --format <format>", "Output format (markdown|compact_json|raw_json)", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (id: string, options) => {
     try {
       const client = new BelifoaClient();
@@ -244,7 +244,7 @@ program
   .requiredOption("--title <title>", "Issue title")
   .option("-d, --description <description>", "Issue description")
   .option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
       const active = getActiveProfile();
@@ -271,7 +271,7 @@ program
 program
   .command("teams")
   .description("List all Linear teams")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
       const client = new BelifoaClient();
@@ -287,7 +287,7 @@ program
 program
   .command("projects")
   .description("List all Linear projects")
-  .option("-f, --format <format>", "Output format", "markdown")
+  .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
       const client = new BelifoaClient();
