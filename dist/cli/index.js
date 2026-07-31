@@ -16210,7 +16210,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.1.0");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.0");
 var authCmd = program2.command("auth").description("Manage multi-workspace Linear authentication profiles");
 authCmd.command("add <profile> <key>").description("Add or update a Linear authentication profile with API key").option("-t, --team <team>", "Default team key for this profile (e.g. ENG)").action(async (profileName, key, options) => {
   try {

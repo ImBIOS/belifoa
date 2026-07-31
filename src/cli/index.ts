@@ -26,7 +26,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.1.0");
+  .version("0.2.0");
 
 // Auth command group
 const authCmd = program.command("auth").description("Manage multi-workspace Linear authentication profiles");
