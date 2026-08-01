@@ -16262,7 +16262,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.2");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.3");
 program2.command("init <profile>").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-t, --team <team>", "Default team key for this project").action((profileName, options) => {
   try {
     saveProjectConfig(process.cwd(), {

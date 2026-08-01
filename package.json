@@ -1,6 +1,6 @@
 {
   "name": "belifoa",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "Better Linear for Agent - Auth, Compact Context, MCP, Skills, Plugins & Hooks",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
