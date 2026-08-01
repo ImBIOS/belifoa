@@ -40,10 +40,20 @@ authCmd
       const client = new BelifoaClient(key);
       const org = await client.getOrganization();
       const me = await client.getMe();
+      const teams = await client.getTeams().catch(() => []);
 
-      const profile = addProfile(profileName, key, org, options.team);
+      const profile = addProfile(
+        profileName,
+        key,
+        org,
+        options.team,
+        teams.map((t) => ({ key: t.key, name: t.name }))
+      );
       console.log(`✅ Saved profile '${profile.name}' for workspace '${org.name}' (${org.urlKey})`);
       console.log(`   Authenticated as: ${me.name} (${me.email || me.id})`);
+      if (teams.length > 0) {
+        console.log(`   Accessible Teams (${teams.length}): ${teams.map((t) => `${t.name} [${t.key}]`).join(", ")}`);
+      }
       if (options.team) console.log(`   Default Team set to: ${options.team.toUpperCase()}`);
     } catch (err: any) {
       console.error(`❌ Failed to verify & add key: ${err.message}`);

@@ -101,12 +101,13 @@ function getActiveProfile() {
   const activeName = config.activeProfile || "default";
   return config.profiles[activeName] || null;
 }
-function addProfile(name, apiKey, organization, defaultTeam) {
+function addProfile(name, apiKey, organization, defaultTeam, teams) {
   const config = loadConfig();
   const profile = {
     name,
     apiKey,
     organization,
+    teams: teams || config.profiles[name]?.teams,
     defaultTeam: defaultTeam || config.profiles[name]?.defaultTeam,
     createdAt: new Date().toISOString()
   };
@@ -404,6 +405,7 @@ function formatProfiles(profiles, format = "cli_table") {
       profile: profile.name,
       org: profile.organization?.name || "N/A",
       active: isActive,
+      teams: profile.teams?.map((t) => t.key) || ["ALL"],
       defaultTeam: profile.defaultTeam || "N/A"
     })));
   }
@@ -413,14 +415,15 @@ function formatProfiles(profiles, format = "cli_table") {
     const rows2 = profiles.map(({ profile, isActive }) => {
       const activeMarker = isActive ? "\u2705 **Active**" : "-";
       const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
+      const teamsStr = profile.teams && profile.teams.length > 0 ? profile.teams.map((t) => `\`${t.key}\``).join(", ") : "All Teams";
       const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
-      return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+      return `| **${profile.name}** | ${orgStr} | ${teamsStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
     });
     return [
       "### \uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):",
       "",
-      "| Profile | Workspace / Org | Default Team | API Key | Status |",
-      "|---|---|---|---|---|",
+      "| Profile | Workspace / Org | Accessible Teams | Default Team | API Key | Status |",
+      "|---|---|---|---|---|---|",
       ...rows2
     ].join(`
 `);
@@ -429,19 +432,21 @@ function formatProfiles(profiles, format = "cli_table") {
     const status = isActive ? "\u2705 Active" : "   -   ";
     const name = profile.name;
     const org = profile.organization?.name ? `${profile.organization.name} (${profile.organization.urlKey})` : "N/A";
+    const teamsStr = profile.teams && profile.teams.length > 0 ? profile.teams.map((t) => t.key).join(", ") : "All Teams";
     const team = profile.defaultTeam || "None";
     const key = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
-    return { status, name, org, team, key, isActive };
+    return { status, name, org, teamsStr, team, key, isActive };
   });
   const maxStatus = Math.max(8, ...rows.map((r) => r.status.length));
   const maxName = Math.max(10, ...rows.map((r) => r.name.length));
-  const maxOrg = Math.max(24, ...rows.map((r) => r.org.length));
+  const maxOrg = Math.max(22, ...rows.map((r) => r.org.length));
+  const maxTeams = Math.max(18, ...rows.map((r) => r.teamsStr.length));
   const maxTeam = Math.max(12, ...rows.map((r) => r.team.length));
   const maxKey = Math.max(13, ...rows.map((r) => r.key.length));
-  const header = `  ${pad("STATUS", maxStatus)}  ${pad("PROFILE", maxName)}  ${pad("WORKSPACE / ORGANIZATION", maxOrg)}  ${pad("DEFAULT TEAM", maxTeam)}  ${pad("API KEY", maxKey)}`;
-  const divider = `  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxOrg)}  ${"\u2500".repeat(maxTeam)}  ${"\u2500".repeat(maxKey)}`;
+  const header = `  ${pad("STATUS", maxStatus)}  ${pad("PROFILE", maxName)}  ${pad("WORKSPACE / ORGANIZATION", maxOrg)}  ${pad("ACCESSIBLE TEAMS", maxTeams)}  ${pad("DEFAULT TEAM", maxTeam)}  ${pad("API KEY", maxKey)}`;
+  const divider = `  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxOrg)}  ${"\u2500".repeat(maxTeams)}  ${"\u2500".repeat(maxTeam)}  ${"\u2500".repeat(maxKey)}`;
   const body = rows.map((r) => {
-    const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
+    const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.teamsStr, maxTeams)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
     return r.isActive ? `\x1B[1m\x1B[32m${rowStr}\x1B[0m` : rowStr;
   });
   return [

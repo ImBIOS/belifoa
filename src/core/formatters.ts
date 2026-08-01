@@ -301,6 +301,7 @@ export function formatProfiles(
         profile: profile.name,
         org: profile.organization?.name || "N/A",
         active: isActive,
+        teams: profile.teams?.map((t) => t.key) || ["ALL"],
         defaultTeam: profile.defaultTeam || "N/A",
       }))
     );
@@ -312,15 +313,16 @@ export function formatProfiles(
     const rows = profiles.map(({ profile, isActive }) => {
       const activeMarker = isActive ? "✅ **Active**" : "-";
       const orgStr = profile.organization?.name ? `${profile.organization.name} (\`${profile.organization.urlKey}\`)` : "N/A";
+      const teamsStr = profile.teams && profile.teams.length > 0 ? profile.teams.map((t) => `\`${t.key}\``).join(", ") : "All Teams";
       const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
-      return `| **${profile.name}** | ${orgStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
+      return `| **${profile.name}** | ${orgStr} | ${teamsStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
     });
 
     return [
       "### 🔐 Saved Linear Authentication Profiles (Workspaces):",
       "",
-      "| Profile | Workspace / Org | Default Team | API Key | Status |",
-      "|---|---|---|---|---|",
+      "| Profile | Workspace / Org | Accessible Teams | Default Team | API Key | Status |",
+      "|---|---|---|---|---|---|",
       ...rows,
     ].join("\n");
   }
@@ -330,22 +332,24 @@ export function formatProfiles(
     const status = isActive ? "✅ Active" : "   -   ";
     const name = profile.name;
     const org = profile.organization?.name ? `${profile.organization.name} (${profile.organization.urlKey})` : "N/A";
+    const teamsStr = profile.teams && profile.teams.length > 0 ? profile.teams.map((t) => t.key).join(", ") : "All Teams";
     const team = profile.defaultTeam || "None";
     const key = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
-    return { status, name, org, team, key, isActive };
+    return { status, name, org, teamsStr, team, key, isActive };
   });
 
   const maxStatus = Math.max(8, ...rows.map((r) => r.status.length));
   const maxName = Math.max(10, ...rows.map((r) => r.name.length));
-  const maxOrg = Math.max(24, ...rows.map((r) => r.org.length));
+  const maxOrg = Math.max(22, ...rows.map((r) => r.org.length));
+  const maxTeams = Math.max(18, ...rows.map((r) => r.teamsStr.length));
   const maxTeam = Math.max(12, ...rows.map((r) => r.team.length));
   const maxKey = Math.max(13, ...rows.map((r) => r.key.length));
 
-  const header = `  ${pad("STATUS", maxStatus)}  ${pad("PROFILE", maxName)}  ${pad("WORKSPACE / ORGANIZATION", maxOrg)}  ${pad("DEFAULT TEAM", maxTeam)}  ${pad("API KEY", maxKey)}`;
-  const divider = `  ${"─".repeat(maxStatus)}  ${"─".repeat(maxName)}  ${"─".repeat(maxOrg)}  ${"─".repeat(maxTeam)}  ${"─".repeat(maxKey)}`;
+  const header = `  ${pad("STATUS", maxStatus)}  ${pad("PROFILE", maxName)}  ${pad("WORKSPACE / ORGANIZATION", maxOrg)}  ${pad("ACCESSIBLE TEAMS", maxTeams)}  ${pad("DEFAULT TEAM", maxTeam)}  ${pad("API KEY", maxKey)}`;
+  const divider = `  ${"─".repeat(maxStatus)}  ${"─".repeat(maxName)}  ${"─".repeat(maxOrg)}  ${"─".repeat(maxTeams)}  ${"─".repeat(maxTeam)}  ${"─".repeat(maxKey)}`;
 
   const body = rows.map((r) => {
-    const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
+    const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.teamsStr, maxTeams)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
     return r.isActive ? `\x1b[1m\x1b[32m${rowStr}\x1b[0m` : rowStr;
   });
 

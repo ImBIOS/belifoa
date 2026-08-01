@@ -61,6 +61,7 @@ export interface AuthProfile {
   name: string; // Profile identifier, e.g., "zuzu", "myrehat", "orderly"
   apiKey: string;
   organization?: LinearOrganization;
+  teams?: Array<{ key: string; name: string }>;
   defaultTeam?: string;
   createdAt?: string;
 }

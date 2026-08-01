@@ -75,13 +75,15 @@ export function addProfile(
   name: string,
   apiKey: string,
   organization?: LinearOrganization,
-  defaultTeam?: string
+  defaultTeam?: string,
+  teams?: Array<{ key: string; name: string }>
 ): AuthProfile {
   const config = loadConfig();
   const profile: AuthProfile = {
     name,
     apiKey,
     organization,
+    teams: teams || config.profiles[name]?.teams,
     defaultTeam: defaultTeam || config.profiles[name]?.defaultTeam,
     createdAt: new Date().toISOString(),
   };
