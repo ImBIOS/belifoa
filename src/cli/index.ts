@@ -9,6 +9,7 @@ import {
   removeProfile,
   getActiveProfile,
   switchDefaultTeam,
+  saveProjectConfig,
 } from "../core/config.js";
 import {
   formatIssueList,
@@ -26,7 +27,26 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.2.0");
+  .version("0.2.2");
+
+// Init command to create project-local config
+program
+  .command("init <profile>")
+  .description("Initialize project-local .belifoarc.json bound to a specific workspace profile")
+  .option("-t, --team <team>", "Default team key for this project")
+  .action((profileName: string, options) => {
+    try {
+      saveProjectConfig(process.cwd(), {
+        profile: profileName,
+        team: options.team?.toUpperCase(),
+      });
+      console.log(`✅ Created project-local .belifoarc.json bound to profile '${profileName}'`);
+      if (options.team) console.log(`   Default Team: ${options.team.toUpperCase()}`);
+    } catch (err: any) {
+      console.error(`❌ Error initializing project config: ${err.message}`);
+      process.exit(1);
+    }
+  });
 
 // Auth command group
 const authCmd = program.command("auth").description("Manage multi-workspace Linear authentication profiles");
@@ -114,14 +134,15 @@ authCmd
 authCmd
   .command("status")
   .description("Check current active profile and workspace auth status")
-  .action(async () => {
-    const active = getActiveProfile();
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .action(async (options) => {
+    const active = getActiveProfile(options.profile);
     if (!active) {
       console.log("❌ No active API profile configured. Run `belifoa auth add <profile> <key>` or set LINEAR_API_KEY.");
       process.exit(1);
     }
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const me = await client.getMe();
       const org = await client.getOrganization();
       console.log(`✅ Active Profile: '${active.name}'`);
@@ -165,10 +186,11 @@ const teamCmd = program.command("team").description("Manage and switch between d
 teamCmd
   .command("list")
   .description("List teams in current active workspace")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const teams = await client.getTeams();
       console.log(formatTeams(teams, options.format as OutputFormat));
     } catch (err: any) {
@@ -180,9 +202,10 @@ teamCmd
 teamCmd
   .command("switch <teamKey>")
   .description("Switch default team key for active profile (e.g. ENG)")
-  .action((teamKey: string) => {
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .action((teamKey: string, options) => {
     try {
-      const updated = switchDefaultTeam(teamKey);
+      const updated = switchDefaultTeam(teamKey, options.profile);
       console.log(`✅ Default team for profile '${updated.name}' set to: '${updated.defaultTeam}'`);
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
@@ -194,11 +217,12 @@ teamCmd
 program
   .command("my-issues")
   .description("List issues assigned to you")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Number of issues", "20")
   .action(async (options) => {
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const issues = await client.getMyIssues(parseInt(options.limit));
       console.log(formatIssueList(issues, options.format as OutputFormat));
     } catch (err: any) {
@@ -211,13 +235,14 @@ program
 program
   .command("search <query>")
   .description("Search Linear issues")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-t, --team <key>", "Filter by team key (e.g., ENG)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Limit results", "15")
   .action(async (query: string, options) => {
     try {
-      const active = getActiveProfile();
-      const client = new BelifoaClient();
+      const active = getActiveProfile(options.profile);
+      const client = new BelifoaClient(undefined, options.profile);
       const teamKey = options.team || active?.defaultTeam;
       const issues = await client.searchIssues(query, {
         teamKey,
@@ -234,10 +259,11 @@ program
 program
   .command("issue <id>")
   .description("Get details for a specific issue (e.g., ENG-123)")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (id: string, options) => {
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const issue = await client.getIssue(id);
       console.log(formatIssueDetail(issue, options.format as OutputFormat));
     } catch (err: any) {
@@ -250,6 +276,7 @@ program
 program
   .command("create")
   .description("Create a new Linear issue")
+  .option("--profile <profile>", "Target workspace profile")
   .option("-t, --team <team>", "Team ID or Key (e.g. ENG)")
   .requiredOption("--title <title>", "Issue title")
   .option("-d, --description <description>", "Issue description")
@@ -257,13 +284,13 @@ program
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
-      const active = getActiveProfile();
+      const active = getActiveProfile(options.profile);
       const team = options.team || active?.defaultTeam;
       if (!team) {
         console.error("❌ Error: Team key is required (--team <key> or set default team via `belifoa team switch <key>`)");
         process.exit(1);
       }
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const issue = await client.createIssue({
         teamIdOrKey: team,
         title: options.title,
@@ -281,10 +308,11 @@ program
 program
   .command("teams")
   .description("List all Linear teams")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const teams = await client.getTeams();
       console.log(formatTeams(teams, options.format as OutputFormat));
     } catch (err: any) {
@@ -297,10 +325,11 @@ program
 program
   .command("projects")
   .description("List all Linear projects")
+  .option("-p, --profile <profile>", "Target workspace profile")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
-      const client = new BelifoaClient();
+      const client = new BelifoaClient(undefined, options.profile);
       const projects = await client.getProjects();
       console.log(formatProjects(projects, options.format as OutputFormat));
     } catch (err: any) {

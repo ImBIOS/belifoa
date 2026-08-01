@@ -13066,13 +13066,20 @@ var init_stdio2 = __esm(() => {
 
 // src/core/config.ts
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { homedir } from "os";
+function getConfigDir() {
+  return process.env.BELIFOA_CONFIG_DIR || join(homedir(), ".config", "belifoa");
+}
+function getConfigFile() {
+  return process.env.BELIFOA_CONFIG_FILE || join(getConfigDir(), "config.json");
+}
 function loadConfig() {
   let fileConfig = {};
-  if (existsSync(CONFIG_FILE)) {
+  const configFile = getConfigFile();
+  if (existsSync(configFile)) {
     try {
-      const content = readFileSync(CONFIG_FILE, "utf-8");
+      const content = readFileSync(configFile, "utf-8");
       fileConfig = JSON.parse(content);
     } catch {}
   }
@@ -13092,28 +13099,61 @@ function loadConfig() {
   };
 }
 function saveConfig(config2) {
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+  const configDir = getConfigDir();
+  const configFile = getConfigFile();
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
   }
-  writeFileSync(CONFIG_FILE, JSON.stringify(config2, null, 2), "utf-8");
+  writeFileSync(configFile, JSON.stringify(config2, null, 2), "utf-8");
 }
-function getActiveProfile() {
+function getProjectConfig(startDir = process.cwd()) {
+  let currentDir = startDir;
+  while (true) {
+    const jsonFile = join(currentDir, ".belifoarc.json");
+    if (existsSync(jsonFile)) {
+      try {
+        const content = readFileSync(jsonFile, "utf-8");
+        return JSON.parse(content);
+      } catch {}
+    }
+    const dotFile = join(currentDir, ".belifoa");
+    if (existsSync(dotFile)) {
+      try {
+        const content = readFileSync(dotFile, "utf-8");
+        return JSON.parse(content);
+      } catch {}
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir)
+      break;
+    currentDir = parentDir;
+  }
+  return null;
+}
+function saveProjectConfig(projectDir, configData) {
+  const file = join(projectDir, ".belifoarc.json");
+  writeFileSync(file, JSON.stringify(configData, null, 2), "utf-8");
+}
+function getActiveProfile(overrideProfileName) {
   const config2 = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
-  const envProfileName = process.env.BELIFOA_PROFILE;
-  if (envProfileName && config2.profiles[envProfileName]) {
-    const profile = { ...config2.profiles[envProfileName] };
+  const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
+  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || getProjectConfig()?.profile;
+  if (targetName && config2.profiles[targetName]) {
+    const profile = { ...config2.profiles[targetName] };
     if (envKey)
       profile.apiKey = envKey;
-    if (process.env.BELIFOA_DEFAULT_TEAM)
-      profile.defaultTeam = process.env.BELIFOA_DEFAULT_TEAM;
+    const projectConfig = getProjectConfig();
+    if (envTeam || projectConfig?.team) {
+      profile.defaultTeam = envTeam || projectConfig?.team;
+    }
     return profile;
   }
   if (envKey) {
     return {
       name: "env",
       apiKey: envKey,
-      defaultTeam: process.env.BELIFOA_DEFAULT_TEAM
+      defaultTeam: envTeam || getProjectConfig()?.team
     };
   }
   const activeName = config2.activeProfile || "default";
@@ -13174,11 +13214,7 @@ function listProfiles() {
     isActive: p.name === activeName
   }));
 }
-var CONFIG_DIR, CONFIG_FILE;
-var init_config = __esm(() => {
-  CONFIG_DIR = join(homedir(), ".config", "belifoa");
-  CONFIG_FILE = join(CONFIG_DIR, "config.json");
-});
+var init_config = () => {};
 
 // src/core/formatters.ts
 function getPriorityLabel(priority) {
@@ -13491,18 +13527,20 @@ var init_formatters = __esm(() => {
 // src/core/client.ts
 class BelifoaClient {
   apiKey;
-  constructor(apiKey) {
-    this.apiKey = apiKey || getActiveProfile()?.apiKey || "";
+  profileName;
+  constructor(apiKey, profileName) {
+    this.profileName = profileName;
+    this.apiKey = apiKey || getActiveProfile(profileName)?.apiKey || "";
   }
   setApiKey(key) {
     this.apiKey = key;
   }
   getApiKey() {
-    return this.apiKey || getActiveProfile()?.apiKey || "";
+    return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
   }
   async graphql(query, variables = {}) {
     if (!this.apiKey) {
-      this.apiKey = getActiveProfile()?.apiKey || "";
+      this.apiKey = getActiveProfile(this.profileName)?.apiKey || "";
     }
     if (!this.apiKey) {
       throw new Error("Linear API Key is missing! Set LINEAR_API_KEY environment variable, run `bun x github:ImBIOS/belifoa#main auth set <key>`, or call `linear_set_api_key` tool.");
@@ -13794,7 +13832,7 @@ function getAuthGuidanceMessage() {
     "",
     "**Options for User**:",
     "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `linear_set_api_key`.",
-    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'zuzu' })`.",
+    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'playzuzu' })`.",
     "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#main auth add <profile-name> <lin_api_...>` in your terminal.",
     "",
     "_To create a Personal API Key, go to Linear Settings -> Account -> API -> Personal API keys._"
@@ -13803,13 +13841,14 @@ function getAuthGuidanceMessage() {
 }
 async function handleToolCall(name, args, client) {
   const format = args.format || "markdown";
+  const targetClient = args.profileName ? new BelifoaClient(undefined, args.profileName) : client;
   try {
     switch (name) {
       case "linear_auth_status": {
         try {
-          const active = getActiveProfile();
-          const me = await client.getMe();
-          const org = await client.getOrganization();
+          const active = getActiveProfile(args.profileName);
+          const me = await targetClient.getMe();
+          const org = await targetClient.getOrganization();
           return {
             content: [
               {
@@ -13865,7 +13904,8 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
         const tempClient = new BelifoaClient(args.apiKey);
         const org = await tempClient.getOrganization();
         const me = await tempClient.getMe();
-        const profile = addProfile(profileName, args.apiKey, org, args.teamKey);
+        const teams = await tempClient.getTeams().catch(() => []);
+        const profile = addProfile(profileName, args.apiKey, org, args.teamKey, teams.map((t) => ({ key: t.key, name: t.name })));
         client.setApiKey(args.apiKey);
         return {
           content: [
@@ -13883,30 +13923,30 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
         };
       }
       case "linear_get_issue": {
-        const issue2 = await client.getIssue(args.id);
+        const issue2 = await targetClient.getIssue(args.id);
         return { content: [{ type: "text", text: formatIssueDetail(issue2, format) }] };
       }
       case "linear_search_issues": {
-        const active = getActiveProfile();
+        const active = getActiveProfile(args.profileName);
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await client.searchIssues(args.query, {
+        const issues = await targetClient.searchIssues(args.query, {
           teamKey,
           limit: args.limit
         });
         return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
       }
       case "linear_get_my_issues": {
-        const issues = await client.getMyIssues(args.limit || 20);
+        const issues = await targetClient.getMyIssues(args.limit || 20);
         return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
       }
       case "linear_manage_issue": {
-        const active = getActiveProfile();
+        const active = getActiveProfile(args.profileName);
         if (args.action === "create") {
           const team = args.teamKey || active?.defaultTeam;
           if (!team || !args.title) {
             throw new Error("teamKey and title are required when action is 'create'. (Set default team or pass teamKey)");
           }
-          const created = await client.createIssue({
+          const created = await targetClient.createIssue({
             teamIdOrKey: team,
             title: args.title,
             description: args.description,
@@ -13919,7 +13959,7 @@ ${formatIssueDetail(created, format)}` }] };
         if (args.action === "update") {
           if (!args.issueId)
             throw new Error("issueId is required for 'update'.");
-          const updated = await client.updateIssue(args.issueId, {
+          const updated = await targetClient.updateIssue(args.issueId, {
             title: args.title,
             description: args.description,
             priority: args.priority
@@ -13932,7 +13972,7 @@ ${formatIssueDetail(updated, format)}` }] };
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await client.addComment(args.issueId, args.commentBody);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody);
           return {
             content: [
               {
@@ -13946,8 +13986,8 @@ ${formatIssueDetail(updated, format)}` }] };
         throw new Error(`Unsupported action: ${args.action}`);
       }
       case "linear_get_teams_and_projects": {
-        const teams = await client.getTeams();
-        const projects = await client.getProjects();
+        const teams = await targetClient.getTeams();
+        const projects = await targetClient.getProjects();
         const text = [formatTeams(teams, format), "", formatProjects(projects, format)].join(`
 `);
         return { content: [{ type: "text", text }] };
@@ -13972,7 +14012,9 @@ var init_tools = __esm(() => {
     description: "Check current active profile, workspace organization, and viewer info.",
     inputSchema: {
       type: "object",
-      properties: {}
+      properties: {
+        profileName: { type: "string", description: "Optional target profile/workspace for isolation" }
+      }
     }
   };
   authListToolSchema = {
@@ -13991,7 +14033,7 @@ var init_tools = __esm(() => {
     inputSchema: {
       type: "object",
       properties: {
-        profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'zuzu', 'myrehat')" },
+        profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'playzuzu', 'myrehat')" },
         teamKey: { type: "string", description: "Optional default team key to activate (e.g. 'ENG')" }
       }
     }
@@ -14003,7 +14045,7 @@ var init_tools = __esm(() => {
       type: "object",
       properties: {
         apiKey: { type: "string", description: "Linear Personal API Key (starts with 'lin_api_')" },
-        profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'zuzu', 'myrehat'). Defaults to 'default'." },
+        profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'playzuzu', 'myrehat'). Defaults to 'default'." },
         teamKey: { type: "string", description: "Optional default team key (e.g., 'ENG')" }
       },
       required: ["apiKey"]
@@ -14016,6 +14058,7 @@ var init_tools = __esm(() => {
       type: "object",
       properties: {
         id: { type: "string", description: "Issue identifier (e.g., 'ENG-123') or UUID" },
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -14033,6 +14076,7 @@ var init_tools = __esm(() => {
       type: "object",
       properties: {
         query: { type: "string", description: "Search query or keyword" },
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
         teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
         limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
         format: {
@@ -14050,6 +14094,7 @@ var init_tools = __esm(() => {
     inputSchema: {
       type: "object",
       properties: {
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
         limit: { type: "number", default: 20 },
         format: {
           type: "string",
@@ -14070,6 +14115,7 @@ var init_tools = __esm(() => {
           enum: ["create", "update", "comment"],
           description: "Action to perform"
         },
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
         issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
         teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
@@ -14091,6 +14137,7 @@ var init_tools = __esm(() => {
     inputSchema: {
       type: "object",
       properties: {
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
         format: {
           type: "string",
           enum: ["markdown", "compact_json"],
@@ -16215,7 +16262,21 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.0");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.2");
+program2.command("init <profile>").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-t, --team <team>", "Default team key for this project").action((profileName, options) => {
+  try {
+    saveProjectConfig(process.cwd(), {
+      profile: profileName,
+      team: options.team?.toUpperCase()
+    });
+    console.log(`\u2705 Created project-local .belifoarc.json bound to profile '${profileName}'`);
+    if (options.team)
+      console.log(`   Default Team: ${options.team.toUpperCase()}`);
+  } catch (err) {
+    console.error(`\u274C Error initializing project config: ${err.message}`);
+    process.exit(1);
+  }
+});
 var authCmd = program2.command("auth").description("Manage multi-workspace Linear authentication profiles");
 authCmd.command("add <profile> <key>").description("Add or update a Linear authentication profile with API key").option("-t, --team <team>", "Default team key for this profile (e.g. ENG)").action(async (profileName, key, options) => {
   try {
@@ -16269,14 +16330,14 @@ authCmd.command("remove <profile>").description("Remove a saved authentication p
     process.exit(1);
   }
 });
-authCmd.command("status").description("Check current active profile and workspace auth status").action(async () => {
-  const active = getActiveProfile();
+authCmd.command("status").description("Check current active profile and workspace auth status").option("-p, --profile <profile>", "Target workspace profile").action(async (options) => {
+  const active = getActiveProfile(options.profile);
   if (!active) {
     console.log("\u274C No active API profile configured. Run `belifoa auth add <profile> <key>` or set LINEAR_API_KEY.");
     process.exit(1);
   }
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const me = await client.getMe();
     const org = await client.getOrganization();
     console.log(`\u2705 Active Profile: '${active.name}'`);
@@ -16303,9 +16364,9 @@ workspaceCmd.command("switch <profile>").description("Switch to workspace profil
   }
 });
 var teamCmd = program2.command("team").description("Manage and switch between default teams in active workspace");
-teamCmd.command("list").description("List teams in current active workspace").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+teamCmd.command("list").description("List teams in current active workspace").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const teams = await client.getTeams();
     console.log(formatTeams(teams, options.format));
   } catch (err) {
@@ -16313,18 +16374,18 @@ teamCmd.command("list").description("List teams in current active workspace").op
     process.exit(1);
   }
 });
-teamCmd.command("switch <teamKey>").description("Switch default team key for active profile (e.g. ENG)").action((teamKey) => {
+teamCmd.command("switch <teamKey>").description("Switch default team key for active profile (e.g. ENG)").option("-p, --profile <profile>", "Target workspace profile").action((teamKey, options) => {
   try {
-    const updated = switchDefaultTeam(teamKey);
+    const updated = switchDefaultTeam(teamKey, options.profile);
     console.log(`\u2705 Default team for profile '${updated.name}' set to: '${updated.defaultTeam}'`);
   } catch (err) {
     console.error(`\u274C Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("my-issues").description("List issues assigned to you").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").action(async (options) => {
+program2.command("my-issues").description("List issues assigned to you").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").action(async (options) => {
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const issues = await client.getMyIssues(parseInt(options.limit));
     console.log(formatIssueList(issues, options.format));
   } catch (err) {
@@ -16332,10 +16393,10 @@ program2.command("my-issues").description("List issues assigned to you").option(
     process.exit(1);
   }
 });
-program2.command("search <query>").description("Search Linear issues").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (query, options) => {
+program2.command("search <query>").description("Search Linear issues").option("-p, --profile <profile>", "Target workspace profile").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (query, options) => {
   try {
-    const active = getActiveProfile();
-    const client = new BelifoaClient;
+    const active = getActiveProfile(options.profile);
+    const client = new BelifoaClient(undefined, options.profile);
     const teamKey = options.team || active?.defaultTeam;
     const issues = await client.searchIssues(query, {
       teamKey,
@@ -16347,9 +16408,9 @@ program2.command("search <query>").description("Search Linear issues").option("-
     process.exit(1);
   }
 });
-program2.command("issue <id>").description("Get details for a specific issue (e.g., ENG-123)").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
+program2.command("issue <id>").description("Get details for a specific issue (e.g., ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const issue2 = await client.getIssue(id);
     console.log(formatIssueDetail(issue2, options.format));
   } catch (err) {
@@ -16357,15 +16418,15 @@ program2.command("issue <id>").description("Get details for a specific issue (e.
     process.exit(1);
   }
 });
-program2.command("create").description("Create a new Linear issue").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const active = getActiveProfile();
+    const active = getActiveProfile(options.profile);
     const team = options.team || active?.defaultTeam;
     if (!team) {
       console.error("\u274C Error: Team key is required (--team <key> or set default team via `belifoa team switch <key>`)");
       process.exit(1);
     }
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const issue2 = await client.createIssue({
       teamIdOrKey: team,
       title: options.title,
@@ -16378,9 +16439,9 @@ program2.command("create").description("Create a new Linear issue").option("-t, 
     process.exit(1);
   }
 });
-program2.command("teams").description("List all Linear teams").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("teams").description("List all Linear teams").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const teams = await client.getTeams();
     console.log(formatTeams(teams, options.format));
   } catch (err) {
@@ -16388,9 +16449,9 @@ program2.command("teams").description("List all Linear teams").option("-f, --for
     process.exit(1);
   }
 });
-program2.command("projects").description("List all Linear projects").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("projects").description("List all Linear projects").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient;
+    const client = new BelifoaClient(undefined, options.profile);
     const projects = await client.getProjects();
     console.log(formatProjects(projects, options.format));
   } catch (err) {

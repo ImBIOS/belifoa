@@ -1,4 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, beforeAll } from "bun:test";
+
+beforeAll(() => {
+  process.env.BELIFOA_CONFIG_DIR = "/tmp/belifoa-unit-tests";
+});
+
 import {
   addProfile,
   switchProfile,

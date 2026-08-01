@@ -1,7 +1,8 @@
 import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization } from "./types.js";
 export declare class BelifoaClient {
     private apiKey;
-    constructor(apiKey?: string);
+    private profileName?;
+    constructor(apiKey?: string, profileName?: string);
     setApiKey(key: string): void;
     getApiKey(): string;
     private graphql;

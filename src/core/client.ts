@@ -6,9 +6,11 @@ const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
 
 export class BelifoaClient {
   private apiKey: string;
+  private profileName?: string;
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || getActiveProfile()?.apiKey || "";
+  constructor(apiKey?: string, profileName?: string) {
+    this.profileName = profileName;
+    this.apiKey = apiKey || getActiveProfile(profileName)?.apiKey || "";
   }
 
   public setApiKey(key: string): void {
@@ -16,12 +18,12 @@ export class BelifoaClient {
   }
 
   public getApiKey(): string {
-    return this.apiKey || getActiveProfile()?.apiKey || "";
+    return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
   }
 
   private async graphql<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
     if (!this.apiKey) {
-      this.apiKey = getActiveProfile()?.apiKey || "";
+      this.apiKey = getActiveProfile(this.profileName)?.apiKey || "";
     }
 
     if (!this.apiKey) {

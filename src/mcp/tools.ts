@@ -23,7 +23,9 @@ export const authStatusToolSchema = {
   description: "Check current active profile, workspace organization, and viewer info.",
   inputSchema: {
     type: "object",
-    properties: {},
+    properties: {
+      profileName: { type: "string", description: "Optional target profile/workspace for isolation" },
+    },
   },
 };
 
@@ -44,7 +46,7 @@ export const authSwitchToolSchema = {
   inputSchema: {
     type: "object",
     properties: {
-      profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'zuzu', 'myrehat')" },
+      profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'playzuzu', 'myrehat')" },
       teamKey: { type: "string", description: "Optional default team key to activate (e.g. 'ENG')" },
     },
   },
@@ -57,7 +59,7 @@ export const setApiKeyToolSchema = {
     type: "object",
     properties: {
       apiKey: { type: "string", description: "Linear Personal API Key (starts with 'lin_api_')" },
-      profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'zuzu', 'myrehat'). Defaults to 'default'." },
+      profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'playzuzu', 'myrehat'). Defaults to 'default'." },
       teamKey: { type: "string", description: "Optional default team key (e.g., 'ENG')" },
     },
     required: ["apiKey"],
@@ -71,6 +73,7 @@ export const getIssueToolSchema = {
     type: "object",
     properties: {
       id: { type: "string", description: "Issue identifier (e.g., 'ENG-123') or UUID" },
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
       format: {
         type: "string",
         enum: ["markdown", "compact_json", "raw_json"],
@@ -89,6 +92,7 @@ export const searchIssuesToolSchema = {
     type: "object",
     properties: {
       query: { type: "string", description: "Search query or keyword" },
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
       teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
       limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
       format: {
@@ -107,6 +111,7 @@ export const getMyIssuesToolSchema = {
   inputSchema: {
     type: "object",
     properties: {
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
       limit: { type: "number", default: 20 },
       format: {
         type: "string",
@@ -128,6 +133,7 @@ export const manageIssueToolSchema = {
         enum: ["create", "update", "comment"],
         description: "Action to perform",
       },
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
       issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
       teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
       title: { type: "string", description: "Issue title for 'create' or 'update'" },
@@ -150,6 +156,7 @@ export const getTeamsAndProjectsToolSchema = {
   inputSchema: {
     type: "object",
     properties: {
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
       format: {
         type: "string",
         enum: ["markdown", "compact_json"],
@@ -176,7 +183,7 @@ export function getAuthGuidanceMessage(): string {
     "",
     "**Options for User**:",
     "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `linear_set_api_key`.",
-    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'zuzu' })`.",
+    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'playzuzu' })`.",
     "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#main auth add <profile-name> <lin_api_...>` in your terminal.",
     "",
     "_To create a Personal API Key, go to Linear Settings -> Account -> API -> Personal API keys._",
@@ -189,14 +196,15 @@ export async function handleToolCall(
   client: BelifoaClient
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const format: OutputFormat = args.format || "markdown";
+  const targetClient = args.profileName ? new BelifoaClient(undefined, args.profileName) : client;
 
   try {
     switch (name) {
       case "linear_auth_status": {
         try {
-          const active = getActiveProfile();
-          const me = await client.getMe();
-          const org = await client.getOrganization();
+          const active = getActiveProfile(args.profileName);
+          const me = await targetClient.getMe();
+          const org = await targetClient.getOrganization();
           return {
             content: [
               {
@@ -255,8 +263,15 @@ export async function handleToolCall(
         const tempClient = new BelifoaClient(args.apiKey);
         const org = await tempClient.getOrganization();
         const me = await tempClient.getMe();
+        const teams = await tempClient.getTeams().catch(() => []);
 
-        const profile = addProfile(profileName, args.apiKey, org, args.teamKey);
+        const profile = addProfile(
+          profileName,
+          args.apiKey,
+          org,
+          args.teamKey,
+          teams.map((t) => ({ key: t.key, name: t.name }))
+        );
         client.setApiKey(args.apiKey);
 
         return {
@@ -275,14 +290,14 @@ export async function handleToolCall(
       }
 
       case "linear_get_issue": {
-        const issue = await client.getIssue(args.id);
+        const issue = await targetClient.getIssue(args.id);
         return { content: [{ type: "text", text: formatIssueDetail(issue, format) }] };
       }
 
       case "linear_search_issues": {
-        const active = getActiveProfile();
+        const active = getActiveProfile(args.profileName);
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await client.searchIssues(args.query, {
+        const issues = await targetClient.searchIssues(args.query, {
           teamKey,
           limit: args.limit,
         });
@@ -290,18 +305,18 @@ export async function handleToolCall(
       }
 
       case "linear_get_my_issues": {
-        const issues = await client.getMyIssues(args.limit || 20);
+        const issues = await targetClient.getMyIssues(args.limit || 20);
         return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
       }
 
       case "linear_manage_issue": {
-        const active = getActiveProfile();
+        const active = getActiveProfile(args.profileName);
         if (args.action === "create") {
           const team = args.teamKey || active?.defaultTeam;
           if (!team || !args.title) {
             throw new Error("teamKey and title are required when action is 'create'. (Set default team or pass teamKey)");
           }
-          const created = await client.createIssue({
+          const created = await targetClient.createIssue({
             teamIdOrKey: team,
             title: args.title,
             description: args.description,
@@ -312,7 +327,7 @@ export async function handleToolCall(
 
         if (args.action === "update") {
           if (!args.issueId) throw new Error("issueId is required for 'update'.");
-          const updated = await client.updateIssue(args.issueId, {
+          const updated = await targetClient.updateIssue(args.issueId, {
             title: args.title,
             description: args.description,
             priority: args.priority,
@@ -324,7 +339,7 @@ export async function handleToolCall(
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await client.addComment(args.issueId, args.commentBody);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody);
           return {
             content: [
               {
@@ -339,8 +354,8 @@ export async function handleToolCall(
       }
 
       case "linear_get_teams_and_projects": {
-        const teams = await client.getTeams();
-        const projects = await client.getProjects();
+        const teams = await targetClient.getTeams();
+        const projects = await targetClient.getProjects();
         const text = [formatTeams(teams, format), "", formatProjects(projects, format)].join("\n");
         return { content: [{ type: "text", text }] };
       }

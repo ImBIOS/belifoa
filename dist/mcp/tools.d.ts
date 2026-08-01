@@ -4,7 +4,12 @@ export declare const authStatusToolSchema: {
     description: string;
     inputSchema: {
         type: string;
-        properties: {};
+        properties: {
+            profileName: {
+                type: string;
+                description: string;
+            };
+        };
     };
 };
 export declare const authListToolSchema: {
@@ -70,6 +75,10 @@ export declare const getIssueToolSchema: {
                 type: string;
                 description: string;
             };
+            profileName: {
+                type: string;
+                description: string;
+            };
             format: {
                 type: string;
                 enum: string[];
@@ -87,6 +96,10 @@ export declare const searchIssuesToolSchema: {
         type: string;
         properties: {
             query: {
+                type: string;
+                description: string;
+            };
+            profileName: {
                 type: string;
                 description: string;
             };
@@ -114,6 +127,10 @@ export declare const getMyIssuesToolSchema: {
     inputSchema: {
         type: string;
         properties: {
+            profileName: {
+                type: string;
+                description: string;
+            };
             limit: {
                 type: string;
                 default: number;
@@ -135,6 +152,10 @@ export declare const manageIssueToolSchema: {
             action: {
                 type: string;
                 enum: string[];
+                description: string;
+            };
+            profileName: {
+                type: string;
                 description: string;
             };
             issueId: {
@@ -176,6 +197,10 @@ export declare const getTeamsAndProjectsToolSchema: {
     inputSchema: {
         type: string;
         properties: {
+            profileName: {
+                type: string;
+                description: string;
+            };
             format: {
                 type: string;
                 enum: string[];

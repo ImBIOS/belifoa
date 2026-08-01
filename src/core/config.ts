@@ -1,17 +1,23 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import type { BelifoaConfig, AuthProfile, OutputFormat, LinearOrganization } from "./types.js";
 
-const CONFIG_DIR = join(homedir(), ".config", "belifoa");
-const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+function getConfigDir(): string {
+  return process.env.BELIFOA_CONFIG_DIR || join(homedir(), ".config", "belifoa");
+}
+
+function getConfigFile(): string {
+  return process.env.BELIFOA_CONFIG_FILE || join(getConfigDir(), "config.json");
+}
 
 export function loadConfig(): BelifoaConfig {
   let fileConfig: any = {};
+  const configFile = getConfigFile();
 
-  if (existsSync(CONFIG_FILE)) {
+  if (existsSync(configFile)) {
     try {
-      const content = readFileSync(CONFIG_FILE, "utf-8");
+      const content = readFileSync(configFile, "utf-8");
       fileConfig = JSON.parse(content);
     } catch {
       // ignore parse error
@@ -38,35 +44,93 @@ export function loadConfig(): BelifoaConfig {
 }
 
 export function saveConfig(config: BelifoaConfig): void {
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+  const configDir = getConfigDir();
+  const configFile = getConfigFile();
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
   }
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+  writeFileSync(configFile, JSON.stringify(config, null, 2), "utf-8");
 }
 
-export function getActiveProfile(): AuthProfile | null {
+/**
+ * Search upwards for project-local .belifoarc.json or .belifoa configuration
+ */
+export function getProjectConfig(startDir: string = process.cwd()): { profile?: string; team?: string; apiKey?: string } | null {
+  let currentDir = startDir;
+  while (true) {
+    const jsonFile = join(currentDir, ".belifoarc.json");
+    if (existsSync(jsonFile)) {
+      try {
+        const content = readFileSync(jsonFile, "utf-8");
+        return JSON.parse(content);
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    const dotFile = join(currentDir, ".belifoa");
+    if (existsSync(dotFile)) {
+      try {
+        const content = readFileSync(dotFile, "utf-8");
+        return JSON.parse(content);
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break; // reached filesystem root
+    currentDir = parentDir;
+  }
+  return null;
+}
+
+/**
+ * Save project-local .belifoarc.json in target or current directory
+ */
+export function saveProjectConfig(
+  projectDir: string,
+  configData: { profile?: string; team?: string }
+): void {
+  const file = join(projectDir, ".belifoarc.json");
+  writeFileSync(file, JSON.stringify(configData, null, 2), "utf-8");
+}
+
+/**
+ * Get active profile with strict isolation hierarchy:
+ * 1. Explicit overrideProfileName (CLI flag --profile / tool parameter)
+ * 2. Environment variable BELIFOA_PROFILE
+ * 3. Project-local configuration (.belifoarc.json in current directory tree)
+ * 4. Global ~/.config/belifoa/config.json activeProfile (Fallback)
+ */
+export function getActiveProfile(overrideProfileName?: string): AuthProfile | null {
   const config = loadConfig();
-
-  // 1. Env variable overrides
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
-  const envProfileName = process.env.BELIFOA_PROFILE;
+  const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
 
-  if (envProfileName && config.profiles[envProfileName]) {
-    const profile = { ...config.profiles[envProfileName] };
+  // 1. Explicit parameter override (from CLI --profile flag or MCP tool profileName)
+  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || getProjectConfig()?.profile;
+
+  if (targetName && config.profiles[targetName]) {
+    const profile = { ...config.profiles[targetName] };
     if (envKey) profile.apiKey = envKey;
-    if (process.env.BELIFOA_DEFAULT_TEAM) profile.defaultTeam = process.env.BELIFOA_DEFAULT_TEAM;
+    const projectConfig = getProjectConfig();
+    if (envTeam || projectConfig?.team) {
+      profile.defaultTeam = envTeam || projectConfig?.team;
+    }
     return profile;
   }
 
+  // 2. Direct environment variable key without profile
   if (envKey) {
     return {
       name: "env",
       apiKey: envKey,
-      defaultTeam: process.env.BELIFOA_DEFAULT_TEAM,
+      defaultTeam: envTeam || getProjectConfig()?.team,
     };
   }
 
-  // 2. Profile from config file
+  // 3. Fallback to global activeProfile
   const activeName = config.activeProfile || "default";
   return config.profiles[activeName] || null;
 }
