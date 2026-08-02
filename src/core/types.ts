@@ -49,10 +49,37 @@ export interface LinearIssue {
   assignee?: string;
   project?: string;
   labels?: string[];
+  estimate?: number;
+  dueDate?: string;
   url?: string;
   createdAt?: string;
   updatedAt?: string;
   comments?: LinearComment[];
+}
+
+export interface CreateIssueParams {
+  teamIdOrKey: string;
+  title: string;
+  description?: string;
+  priority?: number;
+  assignee?: string; // id, email, or name
+  project?: string; // id or name
+  estimate?: number; // story points (1, 2, 3, 5, 8, etc.)
+  dueDate?: string; // YYYY-MM-DD
+  labels?: string[] | string; // label names or ids
+  state?: string; // stateId or state name (e.g., "In Progress", "Todo")
+}
+
+export interface UpdateIssueParams {
+  title?: string;
+  description?: string;
+  priority?: number;
+  assignee?: string;
+  project?: string;
+  estimate?: number;
+  dueDate?: string;
+  labels?: string[] | string;
+  state?: string;
 }
 
 export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";

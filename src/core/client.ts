@@ -1,6 +1,14 @@
 import { loadConfig, getActiveProfile } from "./config.js";
 import { cleanRawIssue } from "./formatters.js";
-import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization } from "./types.js";
+import type {
+  LinearIssue,
+  LinearTeam,
+  LinearProject,
+  LinearUser,
+  LinearOrganization,
+  CreateIssueParams,
+  UpdateIssueParams,
+} from "./types.js";
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
 
@@ -94,6 +102,149 @@ export class BelifoaClient {
   }
 
   /**
+   * Get all workspace users
+   */
+  async getUsers(): Promise<LinearUser[]> {
+    const query = `
+      query GetUsers {
+        users {
+          nodes {
+            id
+            name
+            email
+          }
+        }
+      }
+    `;
+    const data = await this.graphql<{ users: { nodes: LinearUser[] } }>(query);
+    return data.users?.nodes || [];
+  }
+
+  /**
+   * Get all issue labels in workspace
+   */
+  async getIssueLabels(): Promise<Array<{ id: string; name: string }>> {
+    const query = `
+      query GetIssueLabels {
+        issueLabels {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const data = await this.graphql<{ issueLabels: { nodes: Array<{ id: string; name: string }> } }>(query);
+    return data.issueLabels?.nodes || [];
+  }
+
+  /**
+   * Get workflow states for a team
+   */
+  async getTeamStates(teamId: string): Promise<Array<{ id: string; name: string; type: string }>> {
+    const query = `
+      query GetTeamStates($teamId: String!) {
+        team(id: $teamId) {
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+    const data = await this.graphql<{ team: { states: { nodes: Array<{ id: string; name: string; type: string }> } } }>(
+      query,
+      { teamId }
+    );
+    return data.team?.states?.nodes || [];
+  }
+
+  /**
+   * Resolve assignee (id, email, or name) to User ID
+   */
+  async resolveUserId(assigneeStr: string): Promise<string | undefined> {
+    if (!assigneeStr) return undefined;
+    if (assigneeStr.includes("-") && assigneeStr.length > 20) return assigneeStr;
+
+    const users = await this.getUsers();
+    const cleanStr = assigneeStr.replace(/^@/, "").toLowerCase();
+    const match = users.find(
+      (u) =>
+        u.id === assigneeStr ||
+        u.email?.toLowerCase() === cleanStr ||
+        u.name.toLowerCase() === cleanStr ||
+        u.name.toLowerCase().includes(cleanStr)
+    );
+    return match?.id;
+  }
+
+  /**
+   * Resolve project (id or name) to Project ID
+   */
+  async resolveProjectId(projectStr: string): Promise<string | undefined> {
+    if (!projectStr) return undefined;
+    if (projectStr.includes("-") && projectStr.length > 20) return projectStr;
+
+    const projects = await this.getProjects();
+    const cleanStr = projectStr.toLowerCase();
+    const match = projects.find(
+      (p) => p.id === projectStr || p.name.toLowerCase() === cleanStr || p.name.toLowerCase().includes(cleanStr)
+    );
+    return match?.id;
+  }
+
+  /**
+   * Resolve workflow state for a team to State ID
+   */
+  async resolveStateId(teamId: string, stateStr: string): Promise<string | undefined> {
+    if (!stateStr) return undefined;
+    if (stateStr.includes("-") && stateStr.length > 20) return stateStr;
+
+    const states = await this.getTeamStates(teamId);
+    const cleanStr = stateStr.toLowerCase();
+    const match = states.find(
+      (s) => s.id === stateStr || s.name.toLowerCase() === cleanStr || s.type.toLowerCase() === cleanStr
+    );
+    return match?.id;
+  }
+
+  /**
+   * Resolve label names or IDs to Label IDs
+   */
+  async resolveLabelIds(labelsInput: string[] | string): Promise<string[]> {
+    if (!labelsInput) return [];
+    const labelsArr = typeof labelsInput === "string"
+      ? labelsInput.split(",").map((s) => s.trim()).filter(Boolean)
+      : labelsInput;
+
+    if (labelsArr.length === 0) return [];
+
+    const resultIds: string[] = [];
+    const unresolvedNames: string[] = [];
+
+    for (const label of labelsArr) {
+      if (label.includes("-") && label.length > 20) {
+        resultIds.push(label);
+      } else {
+        unresolvedNames.push(label.toLowerCase());
+      }
+    }
+
+    if (unresolvedNames.length > 0) {
+      const allLabels = await this.getIssueLabels();
+      for (const name of unresolvedNames) {
+        const match = allLabels.find((l) => l.id === name || l.name.toLowerCase() === name);
+        if (match) resultIds.push(match.id);
+      }
+    }
+
+    return resultIds;
+  }
+
+  /**
    * Search issues with query string or filters
    */
   async searchIssues(
@@ -110,6 +261,8 @@ export class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             createdAt
             updatedAt
@@ -148,6 +301,8 @@ export class BelifoaClient {
           title
           description
           priority
+          estimate
+          dueDate
           url
           createdAt
           updatedAt
@@ -189,6 +344,8 @@ export class BelifoaClient {
               title
               description
               priority
+              estimate
+              dueDate
               url
               createdAt
               updatedAt
@@ -213,21 +370,20 @@ export class BelifoaClient {
   /**
    * Create an issue
    */
-  async createIssue(params: {
-    teamIdOrKey: string;
-    title: string;
-    description?: string;
-    priority?: number;
-    assigneeId?: string;
-    stateId?: string;
-  }): Promise<LinearIssue> {
-    // First, resolve team ID if key is passed (e.g. "ENG")
+  async createIssue(params: CreateIssueParams): Promise<LinearIssue> {
     let teamId = params.teamIdOrKey;
-    if (!params.teamIdOrKey.includes("-") && params.teamIdOrKey.length < 10) {
+    if (!params.teamIdOrKey.includes("-") || params.teamIdOrKey.length < 10) {
       const teams = await this.getTeams();
-      const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase());
+      const match = teams.find(
+        (t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey
+      );
       if (match) teamId = match.id;
     }
+
+    const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
+    const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
+    const stateId = params.state ? await this.resolveStateId(teamId, params.state) : undefined;
+    const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
 
     const mutation = `
       mutation CreateIssue($input: IssueCreateInput!) {
@@ -239,11 +395,15 @@ export class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             createdAt
             state { name }
             team { key }
             assignee { name email }
+            project { name }
+            labels { nodes { name } }
           }
         }
       }
@@ -253,10 +413,16 @@ export class BelifoaClient {
       teamId,
       title: params.title,
       description: params.description,
-      priority: params.priority ?? 0,
-      assigneeId: params.assigneeId,
-      stateId: params.stateId,
+      priority: params.priority !== undefined ? Number(params.priority) : 0,
+      assigneeId,
+      projectId,
+      stateId,
+      estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
+      dueDate: params.dueDate,
+      labelIds,
     };
+
+    Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
 
     const data = await this.graphql<{ issueCreate: { success: boolean; issue: any } }>(mutation, { input });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
@@ -269,16 +435,17 @@ export class BelifoaClient {
   /**
    * Update an existing issue
    */
-  async updateIssue(
-    id: string,
-    params: {
-      title?: string;
-      description?: string;
-      priority?: number;
-      stateId?: string;
-      assigneeId?: string;
-    }
-  ): Promise<LinearIssue> {
+  async updateIssue(id: string, params: UpdateIssueParams): Promise<LinearIssue> {
+    const existing = await this.getIssue(id).catch(() => undefined);
+    const teamId = existing?.teamKey
+      ? (await this.getTeams()).find((t) => t.key === existing.teamKey)?.id
+      : undefined;
+
+    const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
+    const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
+    const stateId = params.state && teamId ? await this.resolveStateId(teamId, params.state) : undefined;
+    const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
+
     const mutation = `
       mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
         issueUpdate(id: $id, input: $input) {
@@ -289,19 +456,37 @@ export class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             updatedAt
             state { name }
             team { key }
             assignee { name email }
+            project { name }
+            labels { nodes { name } }
           }
         }
       }
     `;
 
+    const input: Record<string, any> = {
+      title: params.title,
+      description: params.description,
+      priority: params.priority !== undefined ? Number(params.priority) : undefined,
+      assigneeId,
+      projectId,
+      stateId,
+      estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
+      dueDate: params.dueDate,
+      labelIds,
+    };
+
+    Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
+
     const data = await this.graphql<{ issueUpdate: { success: boolean; issue: any } }>(mutation, {
-      id,
-      input: params,
+      id: existing?.id || id,
+      input,
     });
 
     if (!data.issueUpdate.success || !data.issueUpdate.issue) {
@@ -309,6 +494,41 @@ export class BelifoaClient {
     }
 
     return cleanRawIssue(data.issueUpdate.issue);
+  }
+
+  /**
+   * Bulk create issues
+   */
+  async createBulkIssues(
+    issues: CreateIssueParams[],
+    defaultTeam?: string
+  ): Promise<{ created: LinearIssue[]; errors: Array<{ index: number; title: string; error: string }> }> {
+    const created: LinearIssue[] = [];
+    const errors: Array<{ index: number; title: string; error: string }> = [];
+
+    for (let i = 0; i < issues.length; i++) {
+      const item = issues[i];
+      try {
+        const teamKey = item.teamIdOrKey || defaultTeam;
+        if (!teamKey) {
+          throw new Error("Missing team key/ID in issue item and no default team provided.");
+        }
+
+        const issue = await this.createIssue({
+          ...item,
+          teamIdOrKey: teamKey,
+        });
+        created.push(issue);
+      } catch (err: any) {
+        errors.push({
+          index: i,
+          title: item.title || `Issue #${i + 1}`,
+          error: err.message || "Unknown error",
+        });
+      }
+    }
+
+    return { created, errors };
   }
 
   /**

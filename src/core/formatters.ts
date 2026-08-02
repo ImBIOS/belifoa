@@ -33,6 +33,8 @@ export function cleanRawIssue(node: any): LinearIssue {
     assignee: node.assignee?.name || node.assignee?.email,
     project: node.project?.name,
     labels: node.labels?.nodes ? node.labels.nodes.map((l: any) => l.name) : (node.labels || []),
+    estimate: node.estimate ?? undefined,
+    dueDate: node.dueDate ?? undefined,
     url: node.url,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
@@ -138,6 +140,8 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
       assignee: issue.assignee,
       project: issue.project,
       labels: issue.labels,
+      estimate: issue.estimate,
+      dueDate: issue.dueDate,
       url: issue.url,
       description: issue.description,
     };
@@ -164,6 +168,8 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
 
     if (issue.project) lines.push(`- **Project**: ${issue.project}`);
     if (issue.labels && issue.labels.length > 0) lines.push(`- **Labels**: ${issue.labels.join(", ")}`);
+    if (issue.estimate !== undefined) lines.push(`- **Estimate**: ${issue.estimate} pts`);
+    if (issue.dueDate) lines.push(`- **Due Date**: ${issue.dueDate}`);
     if (issue.url) lines.push(`- **URL**: ${issue.url}`);
 
     if (issue.description) {
@@ -193,6 +199,8 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
 
   if (issue.project) lines.push(`  \x1b[1mProject\x1b[0m:   ${issue.project}`);
   if (issue.labels && issue.labels.length > 0) lines.push(`  \x1b[1mLabels\x1b[0m:    ${issue.labels.join(", ")}`);
+  if (issue.estimate !== undefined) lines.push(`  \x1b[1mEstimate\x1b[0m:  ${issue.estimate} pts`);
+  if (issue.dueDate) lines.push(`  \x1b[1mDue Date\x1b[0m:  ${issue.dueDate}`);
   if (issue.url) lines.push(`  \x1b[1mURL\x1b[0m:       \x1b[4m${issue.url}\x1b[0m`);
 
   if (issue.description) {
