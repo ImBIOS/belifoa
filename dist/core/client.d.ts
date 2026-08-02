@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization } from "./types.js";
+import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization, CreateIssueParams, UpdateIssueParams } from "./types.js";
 export declare class BelifoaClient {
     private apiKey;
     private profileName?;
@@ -14,6 +14,41 @@ export declare class BelifoaClient {
      * Get current workspace organization info
      */
     getOrganization(): Promise<LinearOrganization>;
+    /**
+     * Get all workspace users
+     */
+    getUsers(): Promise<LinearUser[]>;
+    /**
+     * Get all issue labels in workspace
+     */
+    getIssueLabels(): Promise<Array<{
+        id: string;
+        name: string;
+    }>>;
+    /**
+     * Get workflow states for a team
+     */
+    getTeamStates(teamId: string): Promise<Array<{
+        id: string;
+        name: string;
+        type: string;
+    }>>;
+    /**
+     * Resolve assignee (id, email, or name) to User ID
+     */
+    resolveUserId(assigneeStr: string): Promise<string | undefined>;
+    /**
+     * Resolve project (id or name) to Project ID
+     */
+    resolveProjectId(projectStr: string): Promise<string | undefined>;
+    /**
+     * Resolve workflow state for a team to State ID
+     */
+    resolveStateId(teamId: string, stateStr: string): Promise<string | undefined>;
+    /**
+     * Resolve label names or IDs to Label IDs
+     */
+    resolveLabelIds(labelsInput: string[] | string): Promise<string[]>;
     /**
      * Search issues with query string or filters
      */
@@ -33,24 +68,22 @@ export declare class BelifoaClient {
     /**
      * Create an issue
      */
-    createIssue(params: {
-        teamIdOrKey: string;
-        title: string;
-        description?: string;
-        priority?: number;
-        assigneeId?: string;
-        stateId?: string;
-    }): Promise<LinearIssue>;
+    createIssue(params: CreateIssueParams): Promise<LinearIssue>;
     /**
      * Update an existing issue
      */
-    updateIssue(id: string, params: {
-        title?: string;
-        description?: string;
-        priority?: number;
-        stateId?: string;
-        assigneeId?: string;
-    }): Promise<LinearIssue>;
+    updateIssue(id: string, params: UpdateIssueParams): Promise<LinearIssue>;
+    /**
+     * Bulk create issues
+     */
+    createBulkIssues(issues: CreateIssueParams[], defaultTeam?: string): Promise<{
+        created: LinearIssue[];
+        errors: Array<{
+            index: number;
+            title: string;
+            error: string;
+        }>;
+    }>;
     /**
      * Add comment to an issue
      */

@@ -13237,6 +13237,8 @@ function cleanRawIssue(node) {
     assignee: node.assignee?.name || node.assignee?.email,
     project: node.project?.name,
     labels: node.labels?.nodes ? node.labels.nodes.map((l) => l.name) : node.labels || [],
+    estimate: node.estimate ?? undefined,
+    dueDate: node.dueDate ?? undefined,
     url: node.url,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
@@ -13319,6 +13321,8 @@ function formatIssueDetail(issue2, format = "cli_table") {
       assignee: issue2.assignee,
       project: issue2.project,
       labels: issue2.labels,
+      estimate: issue2.estimate,
+      dueDate: issue2.dueDate,
       url: issue2.url,
       description: issue2.description
     };
@@ -13345,6 +13349,10 @@ function formatIssueDetail(issue2, format = "cli_table") {
       lines2.push(`- **Project**: ${issue2.project}`);
     if (issue2.labels && issue2.labels.length > 0)
       lines2.push(`- **Labels**: ${issue2.labels.join(", ")}`);
+    if (issue2.estimate !== undefined)
+      lines2.push(`- **Estimate**: ${issue2.estimate} pts`);
+    if (issue2.dueDate)
+      lines2.push(`- **Due Date**: ${issue2.dueDate}`);
     if (issue2.url)
       lines2.push(`- **URL**: ${issue2.url}`);
     if (issue2.description) {
@@ -13373,6 +13381,10 @@ function formatIssueDetail(issue2, format = "cli_table") {
     lines.push(`  \x1B[1mProject\x1B[0m:   ${issue2.project}`);
   if (issue2.labels && issue2.labels.length > 0)
     lines.push(`  \x1B[1mLabels\x1B[0m:    ${issue2.labels.join(", ")}`);
+  if (issue2.estimate !== undefined)
+    lines.push(`  \x1B[1mEstimate\x1B[0m:  ${issue2.estimate} pts`);
+  if (issue2.dueDate)
+    lines.push(`  \x1B[1mDue Date\x1B[0m:  ${issue2.dueDate}`);
   if (issue2.url)
     lines.push(`  \x1B[1mURL\x1B[0m:       \x1B[4m${issue2.url}\x1B[0m`);
   if (issue2.description) {
@@ -13592,6 +13604,107 @@ class BelifoaClient {
     const data = await this.graphql(query);
     return data.organization;
   }
+  async getUsers() {
+    const query = `
+      query GetUsers {
+        users {
+          nodes {
+            id
+            name
+            email
+          }
+        }
+      }
+    `;
+    const data = await this.graphql(query);
+    return data.users?.nodes || [];
+  }
+  async getIssueLabels() {
+    const query = `
+      query GetIssueLabels {
+        issueLabels {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const data = await this.graphql(query);
+    return data.issueLabels?.nodes || [];
+  }
+  async getTeamStates(teamId) {
+    const query = `
+      query GetTeamStates($teamId: String!) {
+        team(id: $teamId) {
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+    const data = await this.graphql(query, { teamId });
+    return data.team?.states?.nodes || [];
+  }
+  async resolveUserId(assigneeStr) {
+    if (!assigneeStr)
+      return;
+    if (assigneeStr.includes("-") && assigneeStr.length > 20)
+      return assigneeStr;
+    const users = await this.getUsers();
+    const cleanStr = assigneeStr.replace(/^@/, "").toLowerCase();
+    const match = users.find((u) => u.id === assigneeStr || u.email?.toLowerCase() === cleanStr || u.name.toLowerCase() === cleanStr || u.name.toLowerCase().includes(cleanStr));
+    return match?.id;
+  }
+  async resolveProjectId(projectStr) {
+    if (!projectStr)
+      return;
+    if (projectStr.includes("-") && projectStr.length > 20)
+      return projectStr;
+    const projects = await this.getProjects();
+    const cleanStr = projectStr.toLowerCase();
+    const match = projects.find((p) => p.id === projectStr || p.name.toLowerCase() === cleanStr || p.name.toLowerCase().includes(cleanStr));
+    return match?.id;
+  }
+  async resolveStateId(teamId, stateStr) {
+    if (!stateStr)
+      return;
+    if (stateStr.includes("-") && stateStr.length > 20)
+      return stateStr;
+    const states = await this.getTeamStates(teamId);
+    const cleanStr = stateStr.toLowerCase();
+    const match = states.find((s) => s.id === stateStr || s.name.toLowerCase() === cleanStr || s.type.toLowerCase() === cleanStr);
+    return match?.id;
+  }
+  async resolveLabelIds(labelsInput) {
+    if (!labelsInput)
+      return [];
+    const labelsArr = typeof labelsInput === "string" ? labelsInput.split(",").map((s) => s.trim()).filter(Boolean) : labelsInput;
+    if (labelsArr.length === 0)
+      return [];
+    const resultIds = [];
+    const unresolvedNames = [];
+    for (const label of labelsArr) {
+      if (label.includes("-") && label.length > 20) {
+        resultIds.push(label);
+      } else {
+        unresolvedNames.push(label.toLowerCase());
+      }
+    }
+    if (unresolvedNames.length > 0) {
+      const allLabels = await this.getIssueLabels();
+      for (const name of unresolvedNames) {
+        const match = allLabels.find((l) => l.id === name || l.name.toLowerCase() === name);
+        if (match)
+          resultIds.push(match.id);
+      }
+    }
+    return resultIds;
+  }
   async searchIssues(queryStr, options = {}) {
     const limit = options.limit || 15;
     const query = `
@@ -13603,6 +13716,8 @@ class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             createdAt
             updatedAt
@@ -13634,6 +13749,8 @@ class BelifoaClient {
           title
           description
           priority
+          estimate
+          dueDate
           url
           createdAt
           updatedAt
@@ -13660,42 +13777,48 @@ class BelifoaClient {
     return cleanRawIssue(data.issue);
   }
   async getMyIssues(limit = 20) {
-    const me = await this.getMe();
     const query = `
-      query MyIssues($assigneeId: StringFilter!, $first: Int) {
-        issues(filter: { assignee: { id: $assigneeId } }, first: $first, orderBy: updatedAt) {
-          nodes {
-            id
-            identifier
-            title
-            description
-            priority
-            url
-            createdAt
-            updatedAt
-            state { name }
-            team { key }
-            assignee { name email }
-            project { name }
-            labels { nodes { name } }
+      query MyIssues($first: Int) {
+        viewer {
+          assignedIssues(first: $first, orderBy: updatedAt) {
+            nodes {
+              id
+              identifier
+              title
+              description
+              priority
+              estimate
+              dueDate
+              url
+              createdAt
+              updatedAt
+              state { name }
+              team { key }
+              assignee { name email }
+              project { name }
+              labels { nodes { name } }
+            }
           }
         }
       }
     `;
     const data = await this.graphql(query, {
-      assigneeId: { eq: me.id },
       first: limit
     });
-    return (data.issues?.nodes || []).map(cleanRawIssue);
+    return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
   }
   async createIssue(params) {
     let teamId = params.teamIdOrKey;
-    if (!params.teamIdOrKey.includes("-") && params.teamIdOrKey.length < 10) {
+    if (!params.teamIdOrKey.includes("-") || params.teamIdOrKey.length < 10) {
       const teams = await this.getTeams();
-      const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase());
+      const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey);
       if (match)
         teamId = match.id;
     }
+    const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
+    const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
+    const stateId = params.state ? await this.resolveStateId(teamId, params.state) : undefined;
+    const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
     const mutation = `
       mutation CreateIssue($input: IssueCreateInput!) {
         issueCreate(input: $input) {
@@ -13706,11 +13829,15 @@ class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             createdAt
             state { name }
             team { key }
             assignee { name email }
+            project { name }
+            labels { nodes { name } }
           }
         }
       }
@@ -13719,10 +13846,15 @@ class BelifoaClient {
       teamId,
       title: params.title,
       description: params.description,
-      priority: params.priority ?? 0,
-      assigneeId: params.assigneeId,
-      stateId: params.stateId
+      priority: params.priority !== undefined ? Number(params.priority) : 0,
+      assigneeId,
+      projectId,
+      stateId,
+      estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
+      dueDate: params.dueDate,
+      labelIds
     };
+    Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, { input });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
@@ -13730,6 +13862,14 @@ class BelifoaClient {
     return cleanRawIssue(data.issueCreate.issue);
   }
   async updateIssue(id, params) {
+    const existing = await this.getIssue(id).catch(() => {
+      return;
+    });
+    const teamId = existing?.teamKey ? (await this.getTeams()).find((t) => t.key === existing.teamKey)?.id : undefined;
+    const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
+    const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
+    const stateId = params.state && teamId ? await this.resolveStateId(teamId, params.state) : undefined;
+    const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
     const mutation = `
       mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
         issueUpdate(id: $id, input: $input) {
@@ -13740,23 +13880,64 @@ class BelifoaClient {
             title
             description
             priority
+            estimate
+            dueDate
             url
             updatedAt
             state { name }
             team { key }
             assignee { name email }
+            project { name }
+            labels { nodes { name } }
           }
         }
       }
     `;
+    const input = {
+      title: params.title,
+      description: params.description,
+      priority: params.priority !== undefined ? Number(params.priority) : undefined,
+      assigneeId,
+      projectId,
+      stateId,
+      estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
+      dueDate: params.dueDate,
+      labelIds
+    };
+    Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, {
-      id,
-      input: params
+      id: existing?.id || id,
+      input
     });
     if (!data.issueUpdate.success || !data.issueUpdate.issue) {
       throw new Error(`Failed to update issue ${id}`);
     }
     return cleanRawIssue(data.issueUpdate.issue);
+  }
+  async createBulkIssues(issues, defaultTeam) {
+    const created = [];
+    const errors3 = [];
+    for (let i = 0;i < issues.length; i++) {
+      const item = issues[i];
+      try {
+        const teamKey = item.teamIdOrKey || defaultTeam;
+        if (!teamKey) {
+          throw new Error("Missing team key/ID in issue item and no default team provided.");
+        }
+        const issue2 = await this.createIssue({
+          ...item,
+          teamIdOrKey: teamKey
+        });
+        created.push(issue2);
+      } catch (err) {
+        errors3.push({
+          index: i,
+          title: item.title || `Issue #${i + 1}`,
+          error: err.message || "Unknown error"
+        });
+      }
+    }
+    return { created, errors: errors3 };
   }
   async addComment(issueId, body) {
     const mutation = `
@@ -13950,7 +14131,13 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             teamIdOrKey: team,
             title: args.title,
             description: args.description,
-            priority: args.priority
+            priority: args.priority,
+            assignee: args.assignee,
+            project: args.project,
+            estimate: args.estimate,
+            dueDate: args.dueDate,
+            labels: args.labels,
+            state: args.state
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -13962,7 +14149,13 @@ ${formatIssueDetail(created, format)}` }] };
           const updated = await targetClient.updateIssue(args.issueId, {
             title: args.title,
             description: args.description,
-            priority: args.priority
+            priority: args.priority,
+            assignee: args.assignee,
+            project: args.project,
+            estimate: args.estimate,
+            dueDate: args.dueDate,
+            labels: args.labels,
+            state: args.state
           });
           return { content: [{ type: "text", text: `\u2705 Updated issue:
 
@@ -13985,6 +14178,37 @@ ${formatIssueDetail(updated, format)}` }] };
         }
         throw new Error(`Unsupported action: ${args.action}`);
       }
+      case "linear_bulk_create_issues": {
+        const active = getActiveProfile(args.profileName);
+        const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
+        const items = (args.issues || []).map((i) => ({
+          teamIdOrKey: i.team || defaultTeam,
+          title: i.title,
+          description: i.description,
+          priority: i.priority,
+          assignee: i.assignee,
+          project: i.project,
+          estimate: i.estimate,
+          dueDate: i.dueDate,
+          labels: i.labels,
+          state: i.state
+        }));
+        const result = await targetClient.createBulkIssues(items, defaultTeam);
+        const parts = [];
+        if (result.created.length > 0) {
+          parts.push(`\u2705 Created ${result.created.length} issue(s):
+
+${formatIssueList(result.created, format)}`);
+        }
+        if (result.errors.length > 0) {
+          parts.push(`\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):
+${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).join(`
+`)}`);
+        }
+        return { content: [{ type: "text", text: parts.join(`
+
+`) }] };
+      }
       case "linear_get_teams_and_projects": {
         const teams = await targetClient.getTeams();
         const projects = await targetClient.getProjects();
@@ -14002,7 +14226,7 @@ ${formatIssueDetail(updated, format)}` }] };
     throw err;
   }
 }
-var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, getTeamsAndProjectsToolSchema;
+var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema;
 var init_tools = __esm(() => {
   init_client();
   init_config();
@@ -14121,6 +14345,16 @@ var init_tools = __esm(() => {
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
         description: { type: "string", description: "Description text" },
         priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+        assignee: { type: "string", description: "Assignee user ID, email, or name" },
+        project: { type: "string", description: "Project name or ID" },
+        estimate: { type: "number", description: "Story points estimate (1, 2, 3, 5, 8)" },
+        dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+        labels: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of label names or IDs"
+        },
+        state: { type: "string", description: "Initial workflow state name or ID (e.g., 'Todo', 'In Progress')" },
         commentBody: { type: "string", description: "Comment body text" },
         format: {
           type: "string",
@@ -14129,6 +14363,43 @@ var init_tools = __esm(() => {
         }
       },
       required: ["action"]
+    }
+  };
+  bulkCreateIssuesToolSchema = {
+    name: "linear_bulk_create_issues",
+    description: "Batch create multiple Linear issues in a single tool call for maximum agent execution speed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        issues: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              team: { type: "string", description: "Team key or ID (e.g. 'ENG')" },
+              title: { type: "string", description: "Issue title" },
+              description: { type: "string", description: "Description text" },
+              priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+              assignee: { type: "string", description: "Assignee user ID, email, or name" },
+              project: { type: "string", description: "Project name or ID" },
+              estimate: { type: "number", description: "Story points estimate" },
+              dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+              labels: { type: "array", items: { type: "string" }, description: "Labels" },
+              state: { type: "string", description: "Workflow state name or ID" }
+            },
+            required: ["title"]
+          },
+          description: "List of issue objects to create"
+        },
+        defaultTeamKey: { type: "string", description: "Default team key if omitted in individual issue items" },
+        profileName: { type: "string", description: "Target workspace profile name" },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json"],
+          default: "markdown"
+        }
+      },
+      required: ["issues"]
     }
   };
   getTeamsAndProjectsToolSchema = {
@@ -14156,7 +14427,7 @@ __export(exports_server, {
 async function startMcpServer() {
   const server = new Server({
     name: "belifoa",
-    version: "0.1.0"
+    version: "0.3.0"
   }, {
     capabilities: {
       tools: {}
@@ -14174,6 +14445,7 @@ async function startMcpServer() {
         searchIssuesToolSchema,
         getMyIssuesToolSchema,
         manageIssueToolSchema,
+        bulkCreateIssuesToolSchema,
         getTeamsAndProjectsToolSchema
       ]
     };
@@ -16262,7 +16534,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.2.3");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.3.0");
 program2.command("init <profile>").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-t, --team <team>", "Default team key for this project").action((profileName, options) => {
   try {
     saveProjectConfig(process.cwd(), {
@@ -16418,7 +16690,7 @@ program2.command("issue <id>").description("Get details for a specific issue (e.
     process.exit(1);
   }
 });
-program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
     const active = getActiveProfile(options.profile);
     const team = options.team || active?.defaultTeam;
@@ -16431,11 +16703,54 @@ program2.command("create").description("Create a new Linear issue").option("--pr
       teamIdOrKey: team,
       title: options.title,
       description: options.description,
-      priority: parseInt(options.priority)
+      priority: parseInt(options.priority),
+      assignee: options.assignee,
+      project: options.project,
+      estimate: options.estimate !== undefined ? parseInt(options.estimate) : undefined,
+      dueDate: options.dueDate,
+      labels: options.labels,
+      state: options.state
     });
     console.log(formatIssueDetail(issue2, options.format));
   } catch (err) {
     console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+});
+program2.command("import").alias("create-bulk").description("Bulk create Linear issues from a JSON file").requiredOption("--file <path>", "Path to JSON file containing array of issues").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Default team key/ID if omitted in task items").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+  try {
+    const active = getActiveProfile(options.profile);
+    const defaultTeam = options.team || active?.defaultTeam;
+    const fileContent = readFileSync2(options.file, "utf-8");
+    let data = JSON.parse(fileContent);
+    let issuesArray = [];
+    if (Array.isArray(data)) {
+      issuesArray = data;
+    } else if (Array.isArray(data.issues)) {
+      issuesArray = data.issues;
+    } else if (Array.isArray(data.tasks)) {
+      issuesArray = data.tasks;
+    } else {
+      console.error("\u274C Error: JSON file must contain an array of issue objects or { issues: [...] }");
+      process.exit(1);
+    }
+    console.log(`\uD83D\uDCE6 Importing ${issuesArray.length} issue(s)...`);
+    const client = new BelifoaClient(undefined, options.profile);
+    const result = await client.createBulkIssues(issuesArray, defaultTeam);
+    if (result.created.length > 0) {
+      console.log(`
+\u2705 Successfully created ${result.created.length} issue(s):`);
+      console.log(formatIssueList(result.created, options.format));
+    }
+    if (result.errors.length > 0) {
+      console.error(`
+\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):`);
+      result.errors.forEach((e) => {
+        console.error(`  - Item #${e.index + 1} ("${e.title}"): ${e.error}`);
+      });
+    }
+  } catch (err) {
+    console.error(`\u274C Import Error: ${err.message}`);
     process.exit(1);
   }
 });

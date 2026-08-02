@@ -19,11 +19,11 @@ Standard Linear MCP integrations suffer from:
 
 ---
 
-## 🚀 Quick Start & Usage
+## 🚀 Quick Start & CLI Usage
 
-### 1. Installation & Direct Usage (Without publishing to npm)
+### 1. Direct Usage (Without publishing to npm)
 
-Users and AI agents can execute Belifoa directly from GitHub using `bun x` or `pnpm`:
+Execute Belifoa directly from GitHub using `bun x` or `npx`:
 
 ```bash
 # Set long-lived Linear API key
@@ -41,14 +41,35 @@ bun x github:ImBIOS/belifoa#main search "auth bug" --team ENG
 # Get detailed issue view
 bun x github:ImBIOS/belifoa#main issue ENG-123
 
-# Create an issue
-bun x github:ImBIOS/belifoa#main create --team ENG --title "Fix token race condition" --priority 1
+# Create issue with full fields (assignee, project, estimate, due-date, labels, state)
+bun x github:ImBIOS/belifoa#main create --team ENG \
+  --title "Implement Auth Cache" \
+  --description "Detailed task scope" \
+  --priority 1 \
+  --assignee "jane@example.com" \
+  --project "Security Q3" \
+  --estimate 5 \
+  --due-date "2026-08-15" \
+  --labels "backend,security" \
+  --state "In Progress"
+
+# Bulk import issues from JSON
+bun x github:ImBIOS/belifoa#main import --file tasks.json --team ENG
 ```
 
-Or install locally in your project using `pnpm`:
+### 2. Global Binary Linking (CLI everywhere in PATH)
+
+To make `belifoa` globally accessible anywhere in your system terminal:
 
 ```bash
-pnpm add github:ImBIOS/belifoa
+# Clone or link in repository root:
+bun link
+# or
+pnpm link --global
+
+# Test global execution:
+belifoa --version
+belifoa my-issues
 ```
 
 ---

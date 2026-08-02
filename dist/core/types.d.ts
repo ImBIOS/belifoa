@@ -43,10 +43,35 @@ export interface LinearIssue {
     assignee?: string;
     project?: string;
     labels?: string[];
+    estimate?: number;
+    dueDate?: string;
     url?: string;
     createdAt?: string;
     updatedAt?: string;
     comments?: LinearComment[];
+}
+export interface CreateIssueParams {
+    teamIdOrKey: string;
+    title: string;
+    description?: string;
+    priority?: number;
+    assignee?: string;
+    project?: string;
+    estimate?: number;
+    dueDate?: string;
+    labels?: string[] | string;
+    state?: string;
+}
+export interface UpdateIssueParams {
+    title?: string;
+    description?: string;
+    priority?: number;
+    assignee?: string;
+    project?: string;
+    estimate?: number;
+    dueDate?: string;
+    labels?: string[] | string;
+    state?: string;
 }
 export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";
 export interface AuthProfile {

@@ -178,7 +178,110 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
+            assignee: {
+                type: string;
+                description: string;
+            };
+            project: {
+                type: string;
+                description: string;
+            };
+            estimate: {
+                type: string;
+                description: string;
+            };
+            dueDate: {
+                type: string;
+                description: string;
+            };
+            labels: {
+                type: string;
+                items: {
+                    type: string;
+                };
+                description: string;
+            };
+            state: {
+                type: string;
+                description: string;
+            };
             commentBody: {
+                type: string;
+                description: string;
+            };
+            format: {
+                type: string;
+                enum: string[];
+                default: string;
+            };
+        };
+        required: string[];
+    };
+};
+export declare const bulkCreateIssuesToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {
+            issues: {
+                type: string;
+                items: {
+                    type: string;
+                    properties: {
+                        team: {
+                            type: string;
+                            description: string;
+                        };
+                        title: {
+                            type: string;
+                            description: string;
+                        };
+                        description: {
+                            type: string;
+                            description: string;
+                        };
+                        priority: {
+                            type: string;
+                            description: string;
+                        };
+                        assignee: {
+                            type: string;
+                            description: string;
+                        };
+                        project: {
+                            type: string;
+                            description: string;
+                        };
+                        estimate: {
+                            type: string;
+                            description: string;
+                        };
+                        dueDate: {
+                            type: string;
+                            description: string;
+                        };
+                        labels: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
+                            description: string;
+                        };
+                        state: {
+                            type: string;
+                            description: string;
+                        };
+                    };
+                    required: string[];
+                };
+                description: string;
+            };
+            defaultTeamKey: {
+                type: string;
+                description: string;
+            };
+            profileName: {
                 type: string;
                 description: string;
             };
