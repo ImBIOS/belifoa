@@ -8,7 +8,7 @@ This document contains mandatory guidelines, architectural principles, and workf
 
 ### 1. Atomic Changes & Always Push
 - **Atomic Commits**: Make small, focused, single-purpose code changes per commit. Never mix unrelated refactors, features, or formatting changes in one commit.
-- **Always Commit & Push**: After making an atomic change and verifying tests/build (`pnpm test && pnpm run build`), immediately commit with a clear conventional commit message (`feat: ...`, `fix: ...`, `docs: ...`, `style: ...`) and push to GitHub (`git push origin main`).
+- **Always Commit & Push**: After making an atomic change and verifying tests/build (`pnpm test && pnpm run build`), immediately commit with a clear conventional commit message (`feat: ...`, `fix: ...`, `docs: ...`, `style: ...`) and push to GitHub (`git push origin canary`).
 - **Git Tags for Release**: When releasing feature updates or bug fixes, bump version in `package.json` & `src/cli/index.ts`, rebuild `dist/`, create a lightweight git tag (e.g. `git tag -a v0.2.3 -m "release" && git push origin v0.2.3`), and push tags. This busts GitHub tarball CDN caches for `bun x` execution.
 
 ### 2. Runtime & Tooling
