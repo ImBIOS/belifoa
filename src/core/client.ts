@@ -169,8 +169,13 @@ export class BelifoaClient {
     if (!assigneeStr) return undefined;
     if (assigneeStr.includes("-") && assigneeStr.length > 20) return assigneeStr;
 
-    const users = await this.getUsers();
     const cleanStr = assigneeStr.replace(/^@/, "").toLowerCase();
+    if (cleanStr === "me") {
+      const me = await this.getMe();
+      return me.id;
+    }
+
+    const users = await this.getUsers();
     const match = users.find(
       (u) =>
         u.id === assigneeStr ||

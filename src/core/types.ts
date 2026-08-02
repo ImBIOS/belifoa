@@ -90,6 +90,7 @@ export interface AuthProfile {
   organization?: LinearOrganization;
   teams?: Array<{ key: string; name: string }>;
   defaultTeam?: string;
+  remotes?: string[];
   createdAt?: string;
 }
 

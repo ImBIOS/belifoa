@@ -36,4 +36,15 @@ describe("BelifoaClient & Formatter Extensions", () => {
     const resolved = await client.resolveLabelIds([labelUuid1, labelUuid2]);
     expect(resolved).toEqual([labelUuid1, labelUuid2]);
   });
+
+  it("resolves 'me' and '@me' via getMe in resolveUserId", async () => {
+    const client = new BelifoaClient("fake-key");
+    client.getMe = async () => ({ id: "user-me-123", name: "Current User", email: "me@example.com" });
+
+    const id1 = await client.resolveUserId("me");
+    expect(id1).toBe("user-me-123");
+
+    const id2 = await client.resolveUserId("@me");
+    expect(id2).toBe("user-me-123");
+  });
 });

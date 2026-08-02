@@ -1,6 +1,6 @@
 {
   "name": "belifoa",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "⚡ High-performance, compact Linear client & MCP server for AI agents. Reduces prompt context payload by 70–80% with persistent auth, CLI, skills & git hooks.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -14,6 +14,8 @@
   },
   "scripts": {
     "build": "bun build ./src/cli/index.ts ./src/mcp/server.ts ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly || true",
+    "build:binary": "bun build --compile --outfile=dist/belifoa src/cli/index.ts",
+    "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
     "prepare": "bun run build",
     "dev": "bun run src/cli/index.ts",
     "mcp": "bun run src/mcp/server.ts",

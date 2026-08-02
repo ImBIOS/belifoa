@@ -13068,6 +13068,7 @@ var init_stdio2 = __esm(() => {
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
+import { execSync } from "child_process";
 function getConfigDir() {
   return process.env.BELIFOA_CONFIG_DIR || join(homedir(), ".config", "belifoa");
 }
@@ -13123,10 +13124,57 @@ function getProjectConfig(startDir = process.cwd()) {
         return JSON.parse(content);
       } catch {}
     }
+    const dotJsonFile = join(currentDir, ".belifoa.json");
+    if (existsSync(dotJsonFile)) {
+      try {
+        const content = readFileSync(dotJsonFile, "utf-8");
+        return JSON.parse(content);
+      } catch {}
+    }
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir)
       break;
     currentDir = parentDir;
+  }
+  return null;
+}
+function getGitRemoteUrl(cwd = process.cwd()) {
+  try {
+    const url = execSync("git config --get remote.origin.url", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return url || null;
+  } catch {
+    return null;
+  }
+}
+function detectProfileFromGitRemote(config2, cwd = process.cwd()) {
+  const remoteUrl = getGitRemoteUrl(cwd);
+  if (!remoteUrl)
+    return null;
+  const normalizedRemote = remoteUrl.toLowerCase();
+  const repoNameMatch = remoteUrl.match(/[\/:]([^\/:]+)\.git$/) || remoteUrl.match(/[\/:]([^\/:]+)$/);
+  const repoName = repoNameMatch ? repoNameMatch[1].toLowerCase() : "";
+  for (const profile of Object.values(config2.profiles)) {
+    if (profile.remotes && profile.remotes.some((r) => normalizedRemote.includes(r.toLowerCase()))) {
+      return profile;
+    }
+    if (profile.organization) {
+      const urlKey = profile.organization.urlKey?.toLowerCase();
+      const orgName = profile.organization.name?.toLowerCase();
+      if (urlKey && (normalizedRemote.includes(urlKey) || repoName.includes(urlKey))) {
+        return profile;
+      }
+      if (orgName && (normalizedRemote.includes(orgName) || repoName.includes(orgName))) {
+        return profile;
+      }
+    }
+    const pName = profile.name.toLowerCase();
+    if (pName && (normalizedRemote.includes(pName) || repoName.includes(pName) || pName.includes(repoName))) {
+      return profile;
+    }
   }
   return null;
 }
@@ -13138,12 +13186,12 @@ function getActiveProfile(overrideProfileName) {
   const config2 = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
   const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
-  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || getProjectConfig()?.profile;
+  const projectConfig = getProjectConfig();
+  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || projectConfig?.profile;
   if (targetName && config2.profiles[targetName]) {
     const profile = { ...config2.profiles[targetName] };
     if (envKey)
       profile.apiKey = envKey;
-    const projectConfig = getProjectConfig();
     if (envTeam || projectConfig?.team) {
       profile.defaultTeam = envTeam || projectConfig?.team;
     }
@@ -13153,8 +13201,16 @@ function getActiveProfile(overrideProfileName) {
     return {
       name: "env",
       apiKey: envKey,
-      defaultTeam: envTeam || getProjectConfig()?.team
+      defaultTeam: envTeam || projectConfig?.team
     };
+  }
+  const gitProfile = detectProfileFromGitRemote(config2);
+  if (gitProfile) {
+    const profile = { ...gitProfile };
+    if (projectConfig?.team || envTeam) {
+      profile.defaultTeam = envTeam || projectConfig?.team;
+    }
+    return profile;
   }
   const activeName = config2.activeProfile || "default";
   return config2.profiles[activeName] || null;
@@ -13655,8 +13711,12 @@ class BelifoaClient {
       return;
     if (assigneeStr.includes("-") && assigneeStr.length > 20)
       return assigneeStr;
-    const users = await this.getUsers();
     const cleanStr = assigneeStr.replace(/^@/, "").toLowerCase();
+    if (cleanStr === "me") {
+      const me = await this.getMe();
+      return me.id;
+    }
+    const users = await this.getUsers();
     const match = users.find((u) => u.id === assigneeStr || u.email?.toLowerCase() === cleanStr || u.name.toLowerCase() === cleanStr || u.name.toLowerCase().includes(cleanStr));
     return match?.id;
   }

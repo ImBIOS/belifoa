@@ -27,7 +27,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.3.0");
+  .version("0.3.1");
 
 // Init command to create project-local config
 program
@@ -281,9 +281,11 @@ program
   .requiredOption("--title <title>", "Issue title")
   .option("-d, --description <description>", "Issue description")
   .option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0")
-  .option("-a, --assignee <assignee>", "Assignee user ID, email, or name")
+  .option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)")
+  .option("--assign-me", "Automatically assign created issue to yourself")
   .option("--project <project>", "Project name or ID")
   .option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)")
+  .option("--points <points>", "Story points estimate (alias for --estimate)")
   .option("--due-date <date>", "Due date (YYYY-MM-DD)")
   .option("-l, --labels <labels>", "Comma-separated issue labels")
   .option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')")
@@ -297,14 +299,17 @@ program
         process.exit(1);
       }
       const client = new BelifoaClient(undefined, options.profile);
+      const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined);
+      const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
+
       const issue = await client.createIssue({
         teamIdOrKey: team,
         title: options.title,
         description: options.description,
         priority: parseInt(options.priority),
-        assignee: options.assignee,
+        assignee: assigneeStr,
         project: options.project,
-        estimate: options.estimate !== undefined ? parseInt(options.estimate) : undefined,
+        estimate: estimateVal !== undefined ? parseInt(estimateVal) : undefined,
         dueDate: options.dueDate,
         labels: options.labels,
         state: options.state,
@@ -432,6 +437,37 @@ program
       }
     } catch (err: any) {
       console.error(`Format error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Install standalone compiled binary command
+program
+  .command("install-bin")
+  .description("Compile and install standalone belifoa binary executable to ~/.local/bin/belifoa")
+  .action(async () => {
+    try {
+      const { execSync } = await import("node:child_process");
+      const { homedir } = await import("node:os");
+      const { mkdirSync, copyFileSync, chmodSync } = await import("node:fs");
+      const { join } = await import("node:path");
+
+      console.log("🔨 Compiling standalone Belifoa single-file binary with Bun...");
+      execSync("bun build --compile --outfile=dist/belifoa src/cli/index.ts", {
+        cwd: process.cwd(),
+        stdio: "inherit",
+      });
+
+      const binDir = join(homedir(), ".local", "bin");
+      mkdirSync(binDir, { recursive: true });
+      const targetPath = join(binDir, "belifoa");
+      copyFileSync(join(process.cwd(), "dist", "belifoa"), targetPath);
+      chmodSync(targetPath, 0o755);
+
+      console.log(`\n✅ Installed compiled Belifoa binary to: ${targetPath}`);
+      console.log("👉 Make sure ~/.local/bin is in your PATH to run `belifoa` directly from any terminal.");
+    } catch (err: any) {
+      console.error(`❌ Binary installation failed: ${err.message}`);
       process.exit(1);
     }
   });

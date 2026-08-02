@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
+import { execSync } from "node:child_process";
 import type { BelifoaConfig, AuthProfile, OutputFormat, LinearOrganization } from "./types.js";
 
 function getConfigDir(): string {
@@ -53,7 +54,7 @@ export function saveConfig(config: BelifoaConfig): void {
 }
 
 /**
- * Search upwards for project-local .belifoarc.json or .belifoa configuration
+ * Search upwards for project-local .belifoarc.json, .belifoa, or .belifoa.json configuration
  */
 export function getProjectConfig(startDir: string = process.cwd()): { profile?: string; team?: string; apiKey?: string } | null {
   let currentDir = startDir;
@@ -78,10 +79,78 @@ export function getProjectConfig(startDir: string = process.cwd()): { profile?: 
       }
     }
 
+    const dotJsonFile = join(currentDir, ".belifoa.json");
+    if (existsSync(dotJsonFile)) {
+      try {
+        const content = readFileSync(dotJsonFile, "utf-8");
+        return JSON.parse(content);
+      } catch {
+        // ignore parse error
+      }
+    }
+
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir) break; // reached filesystem root
     currentDir = parentDir;
   }
+  return null;
+}
+
+/**
+ * Get current git repository remote origin URL
+ */
+export function getGitRemoteUrl(cwd: string = process.cwd()): string | null {
+  try {
+    const url = execSync("git config --get remote.origin.url", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return url || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Auto-detect matching profile from git remote origin URL
+ */
+export function detectProfileFromGitRemote(
+  config: BelifoaConfig,
+  cwd: string = process.cwd()
+): AuthProfile | null {
+  const remoteUrl = getGitRemoteUrl(cwd);
+  if (!remoteUrl) return null;
+
+  const normalizedRemote = remoteUrl.toLowerCase();
+  const repoNameMatch = remoteUrl.match(/[\/:]([^\/:]+)\.git$/) || remoteUrl.match(/[\/:]([^\/:]+)$/);
+  const repoName = repoNameMatch ? repoNameMatch[1].toLowerCase() : "";
+
+  for (const profile of Object.values(config.profiles)) {
+    // 1. Explicit remotes array in profile
+    if (profile.remotes && profile.remotes.some((r) => normalizedRemote.includes(r.toLowerCase()))) {
+      return profile;
+    }
+
+    // 2. Organization urlKey or name match
+    if (profile.organization) {
+      const urlKey = profile.organization.urlKey?.toLowerCase();
+      const orgName = profile.organization.name?.toLowerCase();
+      if (urlKey && (normalizedRemote.includes(urlKey) || repoName.includes(urlKey))) {
+        return profile;
+      }
+      if (orgName && (normalizedRemote.includes(orgName) || repoName.includes(orgName))) {
+        return profile;
+      }
+    }
+
+    // 3. Profile name match against repo name or remote URL
+    const pName = profile.name.toLowerCase();
+    if (pName && (normalizedRemote.includes(pName) || repoName.includes(pName) || pName.includes(repoName))) {
+      return profile;
+    }
+  }
+
   return null;
 }
 
@@ -100,37 +169,48 @@ export function saveProjectConfig(
  * Get active profile with strict isolation hierarchy:
  * 1. Explicit overrideProfileName (CLI flag --profile / tool parameter)
  * 2. Environment variable BELIFOA_PROFILE
- * 3. Project-local configuration (.belifoarc.json in current directory tree)
- * 4. Global ~/.config/belifoa/config.json activeProfile (Fallback)
+ * 3. Project-local configuration (.belifoarc.json, .belifoa, or .belifoa.json in CWD tree)
+ * 4. Auto-detected profile from Git remote origin URL
+ * 5. Global ~/.config/belifoa/config.json activeProfile (Fallback)
  */
 export function getActiveProfile(overrideProfileName?: string): AuthProfile | null {
   const config = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
   const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
 
-  // 1. Explicit parameter override (from CLI --profile flag or MCP tool profileName)
-  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || getProjectConfig()?.profile;
+  // 1. Explicit parameter override, env var, or project-local config
+  const projectConfig = getProjectConfig();
+  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || projectConfig?.profile;
 
   if (targetName && config.profiles[targetName]) {
     const profile = { ...config.profiles[targetName] };
     if (envKey) profile.apiKey = envKey;
-    const projectConfig = getProjectConfig();
     if (envTeam || projectConfig?.team) {
       profile.defaultTeam = envTeam || projectConfig?.team;
     }
     return profile;
   }
 
-  // 2. Direct environment variable key without profile
+  // 2. Direct environment variable key without profile name
   if (envKey) {
     return {
       name: "env",
       apiKey: envKey,
-      defaultTeam: envTeam || getProjectConfig()?.team,
+      defaultTeam: envTeam || projectConfig?.team,
     };
   }
 
-  // 3. Fallback to global activeProfile
+  // 3. Auto-detect profile from Git remote URL context
+  const gitProfile = detectProfileFromGitRemote(config);
+  if (gitProfile) {
+    const profile = { ...gitProfile };
+    if (projectConfig?.team || envTeam) {
+      profile.defaultTeam = envTeam || projectConfig?.team;
+    }
+    return profile;
+  }
+
+  // 4. Fallback to global activeProfile
   const activeName = config.activeProfile || "default";
   return config.profiles[activeName] || null;
 }

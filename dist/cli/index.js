@@ -13068,6 +13068,7 @@ var init_stdio2 = __esm(() => {
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
+import { execSync } from "child_process";
 function getConfigDir() {
   return process.env.BELIFOA_CONFIG_DIR || join(homedir(), ".config", "belifoa");
 }
@@ -13123,10 +13124,57 @@ function getProjectConfig(startDir = process.cwd()) {
         return JSON.parse(content);
       } catch {}
     }
+    const dotJsonFile = join(currentDir, ".belifoa.json");
+    if (existsSync(dotJsonFile)) {
+      try {
+        const content = readFileSync(dotJsonFile, "utf-8");
+        return JSON.parse(content);
+      } catch {}
+    }
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir)
       break;
     currentDir = parentDir;
+  }
+  return null;
+}
+function getGitRemoteUrl(cwd = process.cwd()) {
+  try {
+    const url = execSync("git config --get remote.origin.url", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return url || null;
+  } catch {
+    return null;
+  }
+}
+function detectProfileFromGitRemote(config2, cwd = process.cwd()) {
+  const remoteUrl = getGitRemoteUrl(cwd);
+  if (!remoteUrl)
+    return null;
+  const normalizedRemote = remoteUrl.toLowerCase();
+  const repoNameMatch = remoteUrl.match(/[\/:]([^\/:]+)\.git$/) || remoteUrl.match(/[\/:]([^\/:]+)$/);
+  const repoName = repoNameMatch ? repoNameMatch[1].toLowerCase() : "";
+  for (const profile of Object.values(config2.profiles)) {
+    if (profile.remotes && profile.remotes.some((r) => normalizedRemote.includes(r.toLowerCase()))) {
+      return profile;
+    }
+    if (profile.organization) {
+      const urlKey = profile.organization.urlKey?.toLowerCase();
+      const orgName = profile.organization.name?.toLowerCase();
+      if (urlKey && (normalizedRemote.includes(urlKey) || repoName.includes(urlKey))) {
+        return profile;
+      }
+      if (orgName && (normalizedRemote.includes(orgName) || repoName.includes(orgName))) {
+        return profile;
+      }
+    }
+    const pName = profile.name.toLowerCase();
+    if (pName && (normalizedRemote.includes(pName) || repoName.includes(pName) || pName.includes(repoName))) {
+      return profile;
+    }
   }
   return null;
 }
@@ -13138,12 +13186,12 @@ function getActiveProfile(overrideProfileName) {
   const config2 = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
   const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
-  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || getProjectConfig()?.profile;
+  const projectConfig = getProjectConfig();
+  const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || projectConfig?.profile;
   if (targetName && config2.profiles[targetName]) {
     const profile = { ...config2.profiles[targetName] };
     if (envKey)
       profile.apiKey = envKey;
-    const projectConfig = getProjectConfig();
     if (envTeam || projectConfig?.team) {
       profile.defaultTeam = envTeam || projectConfig?.team;
     }
@@ -13153,8 +13201,16 @@ function getActiveProfile(overrideProfileName) {
     return {
       name: "env",
       apiKey: envKey,
-      defaultTeam: envTeam || getProjectConfig()?.team
+      defaultTeam: envTeam || projectConfig?.team
     };
+  }
+  const gitProfile = detectProfileFromGitRemote(config2);
+  if (gitProfile) {
+    const profile = { ...gitProfile };
+    if (projectConfig?.team || envTeam) {
+      profile.defaultTeam = envTeam || projectConfig?.team;
+    }
+    return profile;
   }
   const activeName = config2.activeProfile || "default";
   return config2.profiles[activeName] || null;
@@ -13655,8 +13711,12 @@ class BelifoaClient {
       return;
     if (assigneeStr.includes("-") && assigneeStr.length > 20)
       return assigneeStr;
-    const users = await this.getUsers();
     const cleanStr = assigneeStr.replace(/^@/, "").toLowerCase();
+    if (cleanStr === "me") {
+      const me = await this.getMe();
+      return me.id;
+    }
+    const users = await this.getUsers();
     const match = users.find((u) => u.id === assigneeStr || u.email?.toLowerCase() === cleanStr || u.name.toLowerCase() === cleanStr || u.name.toLowerCase().includes(cleanStr));
     return match?.id;
   }
@@ -16534,7 +16594,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.3.0");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.3.1");
 program2.command("init <profile>").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-t, --team <team>", "Default team key for this project").action((profileName, options) => {
   try {
     saveProjectConfig(process.cwd(), {
@@ -16690,7 +16750,7 @@ program2.command("issue <id>").description("Get details for a specific issue (e.
     process.exit(1);
   }
 });
-program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Automatically assign created issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
     const active = getActiveProfile(options.profile);
     const team = options.team || active?.defaultTeam;
@@ -16699,14 +16759,16 @@ program2.command("create").description("Create a new Linear issue").option("--pr
       process.exit(1);
     }
     const client = new BelifoaClient(undefined, options.profile);
+    const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined);
+    const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
     const issue2 = await client.createIssue({
       teamIdOrKey: team,
       title: options.title,
       description: options.description,
       priority: parseInt(options.priority),
-      assignee: options.assignee,
+      assignee: assigneeStr,
       project: options.project,
-      estimate: options.estimate !== undefined ? parseInt(options.estimate) : undefined,
+      estimate: estimateVal !== undefined ? parseInt(estimateVal) : undefined,
       dueDate: options.dueDate,
       labels: options.labels,
       state: options.state
@@ -16794,6 +16856,30 @@ program2.command("format").description("Format raw Linear GraphQL API JSON respo
     }
   } catch (err) {
     console.error(`Format error: ${err.message}`);
+    process.exit(1);
+  }
+});
+program2.command("install-bin").description("Compile and install standalone belifoa binary executable to ~/.local/bin/belifoa").action(async () => {
+  try {
+    const { execSync: execSync2 } = await import("child_process");
+    const { homedir: homedir2 } = await import("os");
+    const { mkdirSync: mkdirSync2, copyFileSync, chmodSync } = await import("fs");
+    const { join: join2 } = await import("path");
+    console.log("\uD83D\uDD28 Compiling standalone Belifoa single-file binary with Bun...");
+    execSync2("bun build --compile --outfile=dist/belifoa src/cli/index.ts", {
+      cwd: process.cwd(),
+      stdio: "inherit"
+    });
+    const binDir = join2(homedir2(), ".local", "bin");
+    mkdirSync2(binDir, { recursive: true });
+    const targetPath = join2(binDir, "belifoa");
+    copyFileSync(join2(process.cwd(), "dist", "belifoa"), targetPath);
+    chmodSync(targetPath, 493);
+    console.log(`
+\u2705 Installed compiled Belifoa binary to: ${targetPath}`);
+    console.log("\uD83D\uDC49 Make sure ~/.local/bin is in your PATH to run `belifoa` directly from any terminal.");
+  } catch (err) {
+    console.error(`\u274C Binary installation failed: ${err.message}`);
     process.exit(1);
   }
 });

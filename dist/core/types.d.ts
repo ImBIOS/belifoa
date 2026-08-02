@@ -83,6 +83,7 @@ export interface AuthProfile {
         name: string;
     }>;
     defaultTeam?: string;
+    remotes?: string[];
     createdAt?: string;
 }
 export interface BelifoaConfig {
