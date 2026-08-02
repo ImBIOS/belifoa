@@ -83,6 +83,7 @@ export interface AuthProfile {
         name: string;
     }>;
     defaultTeam?: string;
+    defaultAssignee?: string;
     remotes?: string[];
     createdAt?: string;
 }

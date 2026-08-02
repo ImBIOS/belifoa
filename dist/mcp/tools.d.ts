@@ -312,6 +312,24 @@ export declare const getTeamsAndProjectsToolSchema: {
         };
     };
 };
+export declare const getLabelsToolSchema: {
+    name: string;
+    description: string;
+    inputSchema: {
+        type: string;
+        properties: {
+            profileName: {
+                type: string;
+                description: string;
+            };
+            format: {
+                type: string;
+                enum: string[];
+                default: string;
+            };
+        };
+    };
+};
 export declare function getAuthGuidanceMessage(): string;
 export declare function handleToolCall(name: string, args: any, client: BelifoaClient): Promise<{
     content: Array<{

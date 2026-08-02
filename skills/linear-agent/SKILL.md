@@ -28,6 +28,15 @@ bun x github:ImBIOS/belifoa#canary issue ENG-123
 
 # Create an issue
 bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1
+
+# Update an existing issue
+bun x github:ImBIOS/belifoa#canary update ENG-123 --state "In Progress" --assignee me -c "Started working on fix"
+
+# Close or resolve an issue
+bun x github:ImBIOS/belifoa#canary close ENG-123 -c "Fixed in PR #42"
+
+# List workspace labels
+bun x github:ImBIOS/belifoa#canary labels
 ```
 
 ### 2. Streamlined MCP Tools
@@ -35,5 +44,8 @@ When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp`, use these co
 - `linear_get_issue({ id: "ENG-123", format: "markdown" })`
 - `linear_search_issues({ query: "auth bug", teamKey: "ENG" })`
 - `linear_get_my_issues()`
+- `linear_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
+- `linear_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
 - `linear_manage_issue({ action: "comment", issueId: "ENG-123", commentBody: "Fixed in commit abc123" })`
 - `linear_get_teams_and_projects()`
+- `linear_get_labels()`

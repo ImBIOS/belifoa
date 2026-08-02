@@ -210,9 +210,14 @@ export class BelifoaClient {
 
     const states = await this.getTeamStates(teamId);
     const cleanStr = stateStr.toLowerCase();
-    const match = states.find(
+    let match = states.find(
       (s) => s.id === stateStr || s.name.toLowerCase() === cleanStr || s.type.toLowerCase() === cleanStr
     );
+
+    if (!match && ["done", "completed", "closed", "resolved"].includes(cleanStr)) {
+      match = states.find((s) => s.type.toLowerCase() === "completed");
+    }
+
     return match?.id;
   }
 

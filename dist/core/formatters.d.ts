@@ -27,3 +27,10 @@ export declare function formatProfiles(profiles: Array<{
     profile: AuthProfile;
     isActive: boolean;
 }>, format?: OutputFormat): string;
+/**
+ * Format labels list
+ */
+export declare function formatLabels(labels: Array<{
+    id: string;
+    name: string;
+}>, format?: OutputFormat): string;

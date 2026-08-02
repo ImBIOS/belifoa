@@ -13186,34 +13186,42 @@ function getActiveProfile(overrideProfileName) {
   const config2 = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
   const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
+  const envAssignee = process.env.BELIFOA_DEFAULT_ASSIGNEE;
   const projectConfig = getProjectConfig();
   const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || projectConfig?.profile;
+  let active = null;
   if (targetName && config2.profiles[targetName]) {
-    const profile = { ...config2.profiles[targetName] };
-    if (envKey)
-      profile.apiKey = envKey;
-    if (envTeam || projectConfig?.team) {
-      profile.defaultTeam = envTeam || projectConfig?.team;
-    }
-    return profile;
-  }
-  if (envKey) {
-    return {
+    active = { ...config2.profiles[targetName] };
+  } else if (envKey) {
+    active = {
       name: "env",
       apiKey: envKey,
-      defaultTeam: envTeam || projectConfig?.team
+      defaultTeam: envTeam || projectConfig?.team,
+      defaultAssignee: envAssignee || projectConfig?.defaultAssignee
     };
-  }
-  const gitProfile = detectProfileFromGitRemote(config2);
-  if (gitProfile) {
-    const profile = { ...gitProfile };
-    if (projectConfig?.team || envTeam) {
-      profile.defaultTeam = envTeam || projectConfig?.team;
+  } else {
+    const gitProfile = detectProfileFromGitRemote(config2);
+    if (gitProfile) {
+      active = { ...gitProfile };
+    } else {
+      const activeName = config2.activeProfile || "default";
+      if (config2.profiles[activeName]) {
+        active = { ...config2.profiles[activeName] };
+      }
     }
-    return profile;
   }
-  const activeName = config2.activeProfile || "default";
-  return config2.profiles[activeName] || null;
+  if (active) {
+    if (envKey)
+      active.apiKey = envKey;
+    if (envTeam || projectConfig?.team) {
+      active.defaultTeam = envTeam || projectConfig?.team;
+    }
+    const assigneeVal = envAssignee || projectConfig?.defaultAssignee || active.defaultAssignee;
+    if (assigneeVal) {
+      active.defaultAssignee = assigneeVal;
+    }
+  }
+  return active;
 }
 function addProfile(name, apiKey, organization, defaultTeam, teams) {
   const config2 = loadConfig();
@@ -13581,6 +13589,32 @@ function formatProfiles(profiles, format = "cli_table") {
   ].join(`
 `);
 }
+function formatLabels(labels, format = "cli_table") {
+  if (format === "raw_json")
+    return JSON.stringify(labels, null, 2);
+  if (format === "compact_json")
+    return JSON.stringify(labels.map((l) => ({ name: l.name, id: l.id })));
+  if (labels.length === 0)
+    return "No labels found.";
+  if (format === "markdown") {
+    const rows = labels.map((l) => `| **${l.name}** | \`${l.id}\` |`);
+    return ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join(`
+`);
+  }
+  const maxName = Math.max(15, ...labels.map((l) => l.name.length));
+  const maxId = Math.max(10, ...labels.map((l) => l.id.length));
+  const header = `  ${pad("LABEL NAME", maxName)}  ${pad("ID", maxId)}`;
+  const divider = `  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxId)}`;
+  const body = labels.map((l) => `  \x1B[1m\x1B[36m${pad(l.name, maxName)}\x1B[0m  \x1B[2m${pad(l.id, maxId)}\x1B[0m`);
+  return [
+    `\x1B[1m\uD83C\uDFF7\uFE0F Linear Issue Labels (${labels.length}):\x1B[0m`,
+    "",
+    `\x1B[1m${header}\x1B[0m`,
+    `\x1B[2m${divider}\x1B[0m`,
+    ...body
+  ].join(`
+`);
+}
 var PRIORITY_LABELS;
 var init_formatters = __esm(() => {
   PRIORITY_LABELS = {
@@ -13737,7 +13771,10 @@ class BelifoaClient {
       return stateStr;
     const states = await this.getTeamStates(teamId);
     const cleanStr = stateStr.toLowerCase();
-    const match = states.find((s) => s.id === stateStr || s.name.toLowerCase() === cleanStr || s.type.toLowerCase() === cleanStr);
+    let match = states.find((s) => s.id === stateStr || s.name.toLowerCase() === cleanStr || s.type.toLowerCase() === cleanStr);
+    if (!match && ["done", "completed", "closed", "resolved"].includes(cleanStr)) {
+      match = states.find((s) => s.type.toLowerCase() === "completed");
+    }
     return match?.id;
   }
   async resolveLabelIds(labelsInput) {
@@ -14192,7 +14229,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             title: args.title,
             description: args.description,
             priority: args.priority,
-            assignee: args.assignee,
+            assignee: args.assignee || active?.defaultAssignee,
             project: args.project,
             estimate: args.estimate,
             dueDate: args.dueDate,
@@ -14217,9 +14254,28 @@ ${formatIssueDetail(created, format)}` }] };
             labels: args.labels,
             state: args.state
           });
+          if (args.commentBody) {
+            await targetClient.addComment(args.issueId, args.commentBody);
+            const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
+            return { content: [{ type: "text", text: `\u2705 Updated issue:
+
+${formatIssueDetail(refreshed, format)}` }] };
+          }
           return { content: [{ type: "text", text: `\u2705 Updated issue:
 
 ${formatIssueDetail(updated, format)}` }] };
+        }
+        if (args.action === "close" || args.action === "resolve") {
+          if (!args.issueId)
+            throw new Error("issueId is required for 'close' or 'resolve'.");
+          const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
+          if (args.commentBody) {
+            await targetClient.addComment(args.issueId, args.commentBody);
+          }
+          const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
+          return { content: [{ type: "text", text: `\u2705 Closed/Resolved issue ${args.issueId}:
+
+${formatIssueDetail(refreshed, format)}` }] };
         }
         if (args.action === "comment") {
           if (!args.issueId || !args.commentBody) {
@@ -14246,7 +14302,7 @@ ${formatIssueDetail(updated, format)}` }] };
           title: i.title,
           description: i.description,
           priority: i.priority,
-          assignee: i.assignee,
+          assignee: i.assignee || active?.defaultAssignee,
           project: i.project,
           estimate: i.estimate,
           dueDate: i.dueDate,
@@ -14276,6 +14332,10 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
 `);
         return { content: [{ type: "text", text }] };
       }
+      case "linear_get_labels": {
+        const labels = await targetClient.getIssueLabels();
+        return { content: [{ type: "text", text: formatLabels(labels, format) }] };
+      }
       default:
         throw new Error(`Unknown tool name: ${name}`);
     }
@@ -14286,7 +14346,7 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
     throw err;
   }
 }
-var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema;
+var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema, getLabelsToolSchema;
 var init_tools = __esm(() => {
   init_client();
   init_config();
@@ -14390,17 +14450,17 @@ var init_tools = __esm(() => {
   };
   manageIssueToolSchema = {
     name: "linear_manage_issue",
-    description: "Unified tool to create, update, or add comments to a Linear issue in a single action call.",
+    description: "Unified tool to create, update, comment, close, or resolve a Linear issue in a single action call.",
     inputSchema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["create", "update", "comment"],
+          enum: ["create", "update", "comment", "close", "resolve"],
           description: "Action to perform"
         },
         profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
-        issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
+        issueId: { type: "string", description: "Issue identifier for 'update', 'comment', 'close', or 'resolve' (e.g. ENG-123)" },
         teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
         description: { type: "string", description: "Description text" },
@@ -14477,6 +14537,21 @@ var init_tools = __esm(() => {
       }
     }
   };
+  getLabelsToolSchema = {
+    name: "linear_get_labels",
+    description: "Get list of available issue labels for the active workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+        format: {
+          type: "string",
+          enum: ["markdown", "compact_json", "raw_json"],
+          default: "markdown"
+        }
+      }
+    }
+  };
 });
 
 // src/mcp/server.ts
@@ -14506,7 +14581,8 @@ async function startMcpServer() {
         getMyIssuesToolSchema,
         manageIssueToolSchema,
         bulkCreateIssuesToolSchema,
-        getTeamsAndProjectsToolSchema
+        getTeamsAndProjectsToolSchema,
+        getLabelsToolSchema
       ]
     };
   });

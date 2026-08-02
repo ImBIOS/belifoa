@@ -8,6 +8,7 @@ export declare function getProjectConfig(startDir?: string): {
     profile?: string;
     team?: string;
     apiKey?: string;
+    defaultAssignee?: string;
 } | null;
 /**
  * Get current git repository remote origin URL
@@ -23,6 +24,7 @@ export declare function detectProfileFromGitRemote(config: BelifoaConfig, cwd?: 
 export declare function saveProjectConfig(projectDir: string, configData: {
     profile?: string;
     team?: string;
+    defaultAssignee?: string;
 }): void;
 /**
  * Get active profile with strict isolation hierarchy:

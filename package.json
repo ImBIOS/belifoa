@@ -1,6 +1,6 @@
 {
   "name": "belifoa",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "⚡ High-performance, compact Linear client & MCP server for AI agents. Reduces prompt context payload by 70–80% with persistent auth, CLI, skills & git hooks.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

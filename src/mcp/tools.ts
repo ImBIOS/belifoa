@@ -15,6 +15,7 @@ import {
   formatTeams,
   formatProjects,
   formatProfiles,
+  formatLabels,
 } from "../core/formatters.js";
 import type { OutputFormat } from "../core/types.js";
 
@@ -124,17 +125,17 @@ export const getMyIssuesToolSchema = {
 
 export const manageIssueToolSchema = {
   name: "linear_manage_issue",
-  description: "Unified tool to create, update, or add comments to a Linear issue in a single action call.",
+  description: "Unified tool to create, update, comment, close, or resolve a Linear issue in a single action call.",
   inputSchema: {
     type: "object",
     properties: {
       action: {
         type: "string",
-        enum: ["create", "update", "comment"],
+        enum: ["create", "update", "comment", "close", "resolve"],
         description: "Action to perform",
       },
       profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
-      issueId: { type: "string", description: "Issue identifier for 'update' or 'comment' (e.g. ENG-123)" },
+      issueId: { type: "string", description: "Issue identifier for 'update', 'comment', 'close', or 'resolve' (e.g. ENG-123)" },
       teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
       title: { type: "string", description: "Issue title for 'create' or 'update'" },
       description: { type: "string", description: "Description text" },
@@ -208,6 +209,22 @@ export const getTeamsAndProjectsToolSchema = {
       format: {
         type: "string",
         enum: ["markdown", "compact_json"],
+        default: "markdown",
+      },
+    },
+  },
+};
+
+export const getLabelsToolSchema = {
+  name: "linear_get_labels",
+  description: "Get list of available issue labels for the active workspace.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+      format: {
+        type: "string",
+        enum: ["markdown", "compact_json", "raw_json"],
         default: "markdown",
       },
     },
@@ -369,7 +386,7 @@ export async function handleToolCall(
             title: args.title,
             description: args.description,
             priority: args.priority,
-            assignee: args.assignee,
+            assignee: args.assignee || active?.defaultAssignee,
             project: args.project,
             estimate: args.estimate,
             dueDate: args.dueDate,
@@ -392,7 +409,22 @@ export async function handleToolCall(
             labels: args.labels,
             state: args.state,
           });
+          if (args.commentBody) {
+            await targetClient.addComment(args.issueId, args.commentBody);
+            const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
+            return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(refreshed, format)}` }] };
+          }
           return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(updated, format)}` }] };
+        }
+
+        if (args.action === "close" || args.action === "resolve") {
+          if (!args.issueId) throw new Error("issueId is required for 'close' or 'resolve'.");
+          const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
+          if (args.commentBody) {
+            await targetClient.addComment(args.issueId, args.commentBody);
+          }
+          const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
+          return { content: [{ type: "text", text: `✅ Closed/Resolved issue ${args.issueId}:\n\n${formatIssueDetail(refreshed, format)}` }] };
         }
 
         if (args.action === "comment") {
@@ -421,7 +453,7 @@ export async function handleToolCall(
           title: i.title,
           description: i.description,
           priority: i.priority,
-          assignee: i.assignee,
+          assignee: i.assignee || active?.defaultAssignee,
           project: i.project,
           estimate: i.estimate,
           dueDate: i.dueDate,
@@ -449,6 +481,11 @@ export async function handleToolCall(
         const projects = await targetClient.getProjects();
         const text = [formatTeams(teams, format), "", formatProjects(projects, format)].join("\n");
         return { content: [{ type: "text", text }] };
+      }
+
+      case "linear_get_labels": {
+        const labels = await targetClient.getIssueLabels();
+        return { content: [{ type: "text", text: formatLabels(labels, format) }] };
       }
 
       default:

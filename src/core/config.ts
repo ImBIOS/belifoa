@@ -56,7 +56,7 @@ export function saveConfig(config: BelifoaConfig): void {
 /**
  * Search upwards for project-local .belifoarc.json, .belifoa, or .belifoa.json configuration
  */
-export function getProjectConfig(startDir: string = process.cwd()): { profile?: string; team?: string; apiKey?: string } | null {
+export function getProjectConfig(startDir: string = process.cwd()): { profile?: string; team?: string; apiKey?: string; defaultAssignee?: string } | null {
   let currentDir = startDir;
   while (true) {
     const jsonFile = join(currentDir, ".belifoarc.json");
@@ -159,7 +159,7 @@ export function detectProfileFromGitRemote(
  */
 export function saveProjectConfig(
   projectDir: string,
-  configData: { profile?: string; team?: string }
+  configData: { profile?: string; team?: string; defaultAssignee?: string }
 ): void {
   const file = join(projectDir, ".belifoarc.json");
   writeFileSync(file, JSON.stringify(configData, null, 2), "utf-8");
@@ -177,42 +177,47 @@ export function getActiveProfile(overrideProfileName?: string): AuthProfile | nu
   const config = loadConfig();
   const envKey = process.env.BELIFOA_API_KEY || process.env.LINEAR_API_KEY;
   const envTeam = process.env.BELIFOA_DEFAULT_TEAM;
+  const envAssignee = process.env.BELIFOA_DEFAULT_ASSIGNEE;
 
   // 1. Explicit parameter override, env var, or project-local config
   const projectConfig = getProjectConfig();
   const targetName = overrideProfileName || process.env.BELIFOA_PROFILE || projectConfig?.profile;
 
-  if (targetName && config.profiles[targetName]) {
-    const profile = { ...config.profiles[targetName] };
-    if (envKey) profile.apiKey = envKey;
-    if (envTeam || projectConfig?.team) {
-      profile.defaultTeam = envTeam || projectConfig?.team;
-    }
-    return profile;
-  }
+  let active: AuthProfile | null = null;
 
-  // 2. Direct environment variable key without profile name
-  if (envKey) {
-    return {
+  if (targetName && config.profiles[targetName]) {
+    active = { ...config.profiles[targetName] };
+  } else if (envKey) {
+    active = {
       name: "env",
       apiKey: envKey,
       defaultTeam: envTeam || projectConfig?.team,
+      defaultAssignee: envAssignee || projectConfig?.defaultAssignee,
     };
-  }
-
-  // 3. Auto-detect profile from Git remote URL context
-  const gitProfile = detectProfileFromGitRemote(config);
-  if (gitProfile) {
-    const profile = { ...gitProfile };
-    if (projectConfig?.team || envTeam) {
-      profile.defaultTeam = envTeam || projectConfig?.team;
+  } else {
+    const gitProfile = detectProfileFromGitRemote(config);
+    if (gitProfile) {
+      active = { ...gitProfile };
+    } else {
+      const activeName = config.activeProfile || "default";
+      if (config.profiles[activeName]) {
+        active = { ...config.profiles[activeName] };
+      }
     }
-    return profile;
   }
 
-  // 4. Fallback to global activeProfile
-  const activeName = config.activeProfile || "default";
-  return config.profiles[activeName] || null;
+  if (active) {
+    if (envKey) active.apiKey = envKey;
+    if (envTeam || projectConfig?.team) {
+      active.defaultTeam = envTeam || projectConfig?.team;
+    }
+    const assigneeVal = envAssignee || projectConfig?.defaultAssignee || active.defaultAssignee;
+    if (assigneeVal) {
+      active.defaultAssignee = assigneeVal;
+    }
+  }
+
+  return active;
 }
 
 export function addProfile(

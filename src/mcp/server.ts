@@ -14,6 +14,7 @@ import {
   manageIssueToolSchema,
   bulkCreateIssuesToolSchema,
   getTeamsAndProjectsToolSchema,
+  getLabelsToolSchema,
   handleToolCall,
 } from "./tools.js";
 
@@ -45,6 +46,7 @@ export async function startMcpServer() {
         manageIssueToolSchema,
         bulkCreateIssuesToolSchema,
         getTeamsAndProjectsToolSchema,
+        getLabelsToolSchema,
       ],
     };
   });

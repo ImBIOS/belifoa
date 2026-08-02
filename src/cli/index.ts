@@ -17,6 +17,7 @@ import {
   formatTeams,
   formatProjects,
   formatProfiles,
+  formatLabels,
   cleanRawIssue,
 } from "../core/formatters.js";
 import type { OutputFormat } from "../core/types.js";
@@ -27,21 +28,24 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.3.1");
+  .version("0.3.2");
 
 // Init command to create project-local config
 program
   .command("init <profile>")
   .description("Initialize project-local .belifoarc.json bound to a specific workspace profile")
   .option("-t, --team <team>", "Default team key for this project")
+  .option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')")
   .action((profileName: string, options) => {
     try {
       saveProjectConfig(process.cwd(), {
         profile: profileName,
         team: options.team?.toUpperCase(),
+        defaultAssignee: options.assignee,
       });
       console.log(`✅ Created project-local .belifoarc.json bound to profile '${profileName}'`);
       if (options.team) console.log(`   Default Team: ${options.team.toUpperCase()}`);
+      if (options.assignee) console.log(`   Default Assignee: ${options.assignee}`);
     } catch (err: any) {
       console.error(`❌ Error initializing project config: ${err.message}`);
       process.exit(1);
@@ -299,7 +303,7 @@ program
         process.exit(1);
       }
       const client = new BelifoaClient(undefined, options.profile);
-      const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined);
+      const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined) || active?.defaultAssignee;
       const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
 
       const issue = await client.createIssue({
@@ -315,6 +319,99 @@ program
         state: options.state,
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat));
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Update issue command
+program
+  .command("update <id>")
+  .alias("edit")
+  .description("Update an existing Linear issue (e.g., ENG-123)")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("--title <title>", "Updated issue title")
+  .option("-d, --description <description>", "Updated issue description")
+  .option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)")
+  .option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)")
+  .option("--assign-me", "Assign issue to yourself")
+  .option("--project <project>", "Project name or ID")
+  .option("-e, --estimate <points>", "Story points estimate")
+  .option("--points <points>", "Story points estimate (alias for --estimate)")
+  .option("--due-date <date>", "Due date (YYYY-MM-DD)")
+  .option("-l, --labels <labels>", "Comma-separated issue labels")
+  .option("-s, --state <state>", "Workflow state ID or name (e.g. 'In Progress', 'Done')")
+  .option("-c, --comment <comment>", "Add a comment along with the update")
+  .option("-f, --format <format>", "Output format", "cli_table")
+  .action(async (id: string, options) => {
+    try {
+      const client = new BelifoaClient(undefined, options.profile);
+      const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined);
+      const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
+
+      const updated = await client.updateIssue(id, {
+        title: options.title,
+        description: options.description,
+        priority: options.priority !== undefined ? parseInt(options.priority) : undefined,
+        assignee: assigneeStr,
+        project: options.project,
+        estimate: estimateVal !== undefined ? parseInt(estimateVal) : undefined,
+        dueDate: options.dueDate,
+        labels: options.labels,
+        state: options.state,
+      });
+
+      if (options.comment) {
+        await client.addComment(id, options.comment);
+        const refreshed = await client.getIssue(id).catch(() => updated);
+        console.log(formatIssueDetail(refreshed, options.format as OutputFormat));
+      } else {
+        console.log(formatIssueDetail(updated, options.format as OutputFormat));
+      }
+    } catch (err: any) {
+      console.error(`Error updating issue ${id}: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Close / Resolve issue command
+program
+  .command("close <id>")
+  .alias("resolve")
+  .alias("done")
+  .description("Close or resolve an issue by transitioning state to Done / Completed")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("-c, --comment <comment>", "Add an optional closing comment")
+  .option("-f, --format <format>", "Output format", "cli_table")
+  .action(async (id: string, options) => {
+    try {
+      const client = new BelifoaClient(undefined, options.profile);
+      const updated = await client.updateIssue(id, { state: "Done" });
+
+      if (options.comment) {
+        await client.addComment(id, options.comment);
+      }
+
+      const refreshed = options.comment ? await client.getIssue(id).catch(() => updated) : updated;
+      console.log(formatIssueDetail(refreshed, options.format as OutputFormat));
+    } catch (err: any) {
+      console.error(`Error closing issue ${id}: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Labels command
+program
+  .command("labels")
+  .description("List all workspace issue labels")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("-f, --format <format>", "Output format", "cli_table")
+  .action(async (options) => {
+    try {
+      const client = new BelifoaClient(undefined, options.profile);
+      const labels = await client.getIssueLabels();
+      console.log(formatLabels(labels, options.format as OutputFormat));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

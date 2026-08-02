@@ -370,3 +370,38 @@ export function formatProfiles(
     "",
   ].join("\n");
 }
+
+/**
+ * Format labels list
+ */
+export function formatLabels(
+  labels: Array<{ id: string; name: string }>,
+  format: OutputFormat = "cli_table"
+): string {
+  if (format === "raw_json") return JSON.stringify(labels, null, 2);
+  if (format === "compact_json") return JSON.stringify(labels.map((l) => ({ name: l.name, id: l.id })));
+  if (labels.length === 0) return "No labels found.";
+
+  if (format === "markdown") {
+    const rows = labels.map((l) => `| **${l.name}** | \`${l.id}\` |`);
+    return ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join("\n");
+  }
+
+  // CLI Terminal Table Format
+  const maxName = Math.max(15, ...labels.map((l) => l.name.length));
+  const maxId = Math.max(10, ...labels.map((l) => l.id.length));
+
+  const header = `  ${pad("LABEL NAME", maxName)}  ${pad("ID", maxId)}`;
+  const divider = `  ${"─".repeat(maxName)}  ${"─".repeat(maxId)}`;
+
+  const body = labels.map((l) => `  \x1b[1m\x1b[36m${pad(l.name, maxName)}\x1b[0m  \x1b[2m${pad(l.id, maxId)}\x1b[0m`);
+
+  return [
+    `\x1b[1m🏷️ Linear Issue Labels (${labels.length}):\x1b[0m`,
+    "",
+    `\x1b[1m${header}\x1b[0m`,
+    `\x1b[2m${divider}\x1b[0m`,
+    ...body,
+  ].join("\n");
+}
+
