@@ -40,3 +40,32 @@ Belifoa must support concurrent execution across multiple AI agents in different
 
 - **Isolated Test Config**: Unit tests in `tests/` MUST set `process.env.BELIFOA_CONFIG_DIR = "/tmp/..."` before running tests so that `pnpm test` NEVER overwrites or corrupts real user API keys in `~/.config/belifoa/config.json`.
 - **Pre-Push Verification**: Always run `pnpm test && pnpm run build` before committing or tagging a release.
+
+
+## 📋 Task Tracking & Linear Management with Belifoa
+
+All tasks, bugs, features, and refactoring efforts must be tracked as Linear issues using **Belifoa** (`github:ImBIOS/belifoa#canary`).
+
+### How to Use Belifoa (CLI & Skill)
+
+Agents can query, create, search, and update Linear issues directly in the terminal or via MCP tools:
+
+```bash
+# Check auth status and active workspace profile
+bun x github:ImBIOS/belifoa#canary auth status
+
+# List my assigned issues
+bun x github:ImBIOS/belifoa#canary my-issues
+
+# Search issues for a specific topic or team
+bun x github:ImBIOS/belifoa#canary search "<query>"
+
+# Get detailed view of an issue
+bun x github:ImBIOS/belifoa#canary issue <ISSUE-ID>
+
+# Create a new issue
+bun x github:ImBIOS/belifoa#canary create --title "<Title>" --description "<Details>" --priority 1
+```
+
+### Belifoa Skill Location
+The Linear Agent skill instructions are available in `.agents/skills/linear-agent/SKILL.md` or `skills/linear-agent/SKILL.md`.
