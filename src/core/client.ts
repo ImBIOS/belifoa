@@ -179,35 +179,35 @@ export class BelifoaClient {
    * List issues assigned to the viewer
    */
   async getMyIssues(limit: number = 20): Promise<LinearIssue[]> {
-    const me = await this.getMe();
     const query = `
-      query MyIssues($assigneeId: StringFilter!, $first: Int) {
-        issues(filter: { assignee: { id: $assigneeId } }, first: $first, orderBy: updatedAt) {
-          nodes {
-            id
-            identifier
-            title
-            description
-            priority
-            url
-            createdAt
-            updatedAt
-            state { name }
-            team { key }
-            assignee { name email }
-            project { name }
-            labels { nodes { name } }
+      query MyIssues($first: Int) {
+        viewer {
+          assignedIssues(first: $first, orderBy: updatedAt) {
+            nodes {
+              id
+              identifier
+              title
+              description
+              priority
+              url
+              createdAt
+              updatedAt
+              state { name }
+              team { key }
+              assignee { name email }
+              project { name }
+              labels { nodes { name } }
+            }
           }
         }
       }
     `;
 
-    const data = await this.graphql<{ issues: { nodes: any[] } }>(query, {
-      assigneeId: { eq: me.id },
+    const data = await this.graphql<{ viewer: { assignedIssues: { nodes: any[] } } }>(query, {
       first: limit,
     });
 
-    return (data.issues?.nodes || []).map(cleanRawIssue);
+    return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
   }
 
   /**
