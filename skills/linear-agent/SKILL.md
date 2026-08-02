@@ -14,24 +14,24 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 ## Usage Modes
 
 ### 1. Direct CLI Execution (Zero MCP Overhead)
-Agents can execute CLI commands directly in terminal using `bun x github:ImBIOS/belifoa#main`:
+Agents can execute CLI commands directly in terminal using `bun x github:ImBIOS/belifoa#canary`:
 
 ```bash
 # List my assigned issues
-bun x github:ImBIOS/belifoa#main my-issues
+bun x github:ImBIOS/belifoa#canary my-issues
 
 # Search issues
-bun x github:ImBIOS/belifoa#main search "login bug" --team ENG
+bun x github:ImBIOS/belifoa#canary search "login bug" --team ENG
 
 # Get detailed issue view
-bun x github:ImBIOS/belifoa#main issue ENG-123
+bun x github:ImBIOS/belifoa#canary issue ENG-123
 
 # Create an issue
-bun x github:ImBIOS/belifoa#main create --team ENG --title "Fix race condition in auth" --priority 1
+bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1
 ```
 
 ### 2. Streamlined MCP Tools
-When MCP is connected via `bun x github:ImBIOS/belifoa#main mcp`, use these consolidated tools:
+When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp`, use these consolidated tools:
 - `linear_get_issue({ id: "ENG-123", format: "markdown" })`
 - `linear_search_issues({ query: "auth bug", teamKey: "ENG" })`
 - `linear_get_my_issues()`

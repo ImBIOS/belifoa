@@ -36,7 +36,7 @@ export class BelifoaClient {
 
     if (!this.apiKey) {
       throw new Error(
-        "Linear API Key is missing! Set LINEAR_API_KEY environment variable, run `bun x github:ImBIOS/belifoa#main auth set <key>`, or call `linear_set_api_key` tool."
+        "Linear API Key is missing! Set LINEAR_API_KEY environment variable, run `bun x github:ImBIOS/belifoa#canary auth set <key>`, or call `linear_set_api_key` tool."
       );
     }
 

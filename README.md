@@ -45,7 +45,7 @@ Standard Linear integrations for LLM agents suffer from three major inefficienci
 
 - **⚡ Token-Efficient Context Formatting**: CLI defaults to ANSI-styled `cli_table`, while MCP tools default to lightweight `markdown` and `compact_json` to maximize token budget.
 - **🔐 Multi-Profile & Workspace Isolation**: Manage multiple Linear accounts and team profiles seamlessly without cross-project state leakage.
-- **🚀 Zero-Installation Direct Execution**: Run instantly using `bun x github:ImBIOS/belifoa#main` or `pnpm add github:ImBIOS/belifoa`.
+- **🚀 Zero-Installation Direct Execution**: Run instantly using `bun x github:ImBIOS/belifoa#canary` or `pnpm add github:ImBIOS/belifoa`.
 - **📦 Bulk Import & Batch Operations**: Easily create or import issues in bulk from structured JSON files.
 - **📈 Built-In Benchmarking Suite**: Measure exact byte size and estimated token footprint savings against official Linear MCP tools.
 
@@ -76,22 +76,22 @@ You can execute Belifoa directly from GitHub without publishing to npm:
 
 ```bash
 # Set long-lived Linear API key
-bun x github:ImBIOS/belifoa#main auth set <lin_api_...>
+bun x github:ImBIOS/belifoa#canary auth set <lin_api_...>
 
 # Check authentication status
-bun x github:ImBIOS/belifoa#main auth status
+bun x github:ImBIOS/belifoa#canary auth status
 
 # List issues assigned to you
-bun x github:ImBIOS/belifoa#main my-issues
+bun x github:ImBIOS/belifoa#canary my-issues
 
 # Search issues by query and team
-bun x github:ImBIOS/belifoa#main search "auth bug" --team ENG
+bun x github:ImBIOS/belifoa#canary search "auth bug" --team ENG
 
 # Inspect issue details
-bun x github:ImBIOS/belifoa#main issue ENG-123
+bun x github:ImBIOS/belifoa#canary issue ENG-123
 
 # Create issue with full metadata fields
-bun x github:ImBIOS/belifoa#main create --team ENG \
+bun x github:ImBIOS/belifoa#canary create --team ENG \
   --title "Implement Token Cache" \
   --description "Optimize context payload retention" \
   --priority 1 \
@@ -103,7 +103,7 @@ bun x github:ImBIOS/belifoa#main create --team ENG \
   --state "In Progress"
 
 # Bulk import issues from JSON file
-bun x github:ImBIOS/belifoa#main import --file tasks.json --team ENG
+bun x github:ImBIOS/belifoa#canary import --file tasks.json --team ENG
 ```
 
 ### 2. Global Terminal Linking
@@ -132,7 +132,7 @@ Belifoa runs natively as a Model Context Protocol (MCP) server for AI code edito
   "mcpServers": {
     "belifoa": {
       "command": "bun",
-      "args": ["x", "github:ImBIOS/belifoa#main", "mcp"],
+      "args": ["x", "github:ImBIOS/belifoa#canary", "mcp"],
       "env": {
         "LINEAR_API_KEY": "lin_api_your_key_here"
       }

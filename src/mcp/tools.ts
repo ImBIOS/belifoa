@@ -232,7 +232,7 @@ export function getAuthGuidanceMessage(): string {
     "**Options for User**:",
     "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `linear_set_api_key`.",
     "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'playzuzu' })`.",
-    "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#main auth add <profile-name> <lin_api_...>` in your terminal.",
+    "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#canary auth add <profile-name> <lin_api_...>` in your terminal.",
     "",
     "_To create a Personal API Key, go to Linear Settings -> Account -> API -> Personal API keys._",
   ].join("\n");
