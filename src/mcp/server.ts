@@ -12,6 +12,7 @@ import {
   searchIssuesToolSchema,
   getMyIssuesToolSchema,
   manageIssueToolSchema,
+  bulkCreateIssuesToolSchema,
   getTeamsAndProjectsToolSchema,
   handleToolCall,
 } from "./tools.js";
@@ -20,7 +21,7 @@ export async function startMcpServer() {
   const server = new Server(
     {
       name: "belifoa",
-      version: "0.1.0",
+      version: "0.3.0",
     },
     {
       capabilities: {
@@ -42,6 +43,7 @@ export async function startMcpServer() {
         searchIssuesToolSchema,
         getMyIssuesToolSchema,
         manageIssueToolSchema,
+        bulkCreateIssuesToolSchema,
         getTeamsAndProjectsToolSchema,
       ],
     };

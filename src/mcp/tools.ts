@@ -139,6 +139,16 @@ export const manageIssueToolSchema = {
       title: { type: "string", description: "Issue title for 'create' or 'update'" },
       description: { type: "string", description: "Description text" },
       priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+      assignee: { type: "string", description: "Assignee user ID, email, or name" },
+      project: { type: "string", description: "Project name or ID" },
+      estimate: { type: "number", description: "Story points estimate (1, 2, 3, 5, 8)" },
+      dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+      labels: {
+        type: "array",
+        items: { type: "string" },
+        description: "Array of label names or IDs",
+      },
+      state: { type: "string", description: "Initial workflow state name or ID (e.g., 'Todo', 'In Progress')" },
       commentBody: { type: "string", description: "Comment body text" },
       format: {
         type: "string",
@@ -147,6 +157,44 @@ export const manageIssueToolSchema = {
       },
     },
     required: ["action"],
+  },
+};
+
+export const bulkCreateIssuesToolSchema = {
+  name: "linear_bulk_create_issues",
+  description: "Batch create multiple Linear issues in a single tool call for maximum agent execution speed.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      issues: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            team: { type: "string", description: "Team key or ID (e.g. 'ENG')" },
+            title: { type: "string", description: "Issue title" },
+            description: { type: "string", description: "Description text" },
+            priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+            assignee: { type: "string", description: "Assignee user ID, email, or name" },
+            project: { type: "string", description: "Project name or ID" },
+            estimate: { type: "number", description: "Story points estimate" },
+            dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+            labels: { type: "array", items: { type: "string" }, description: "Labels" },
+            state: { type: "string", description: "Workflow state name or ID" },
+          },
+          required: ["title"],
+        },
+        description: "List of issue objects to create",
+      },
+      defaultTeamKey: { type: "string", description: "Default team key if omitted in individual issue items" },
+      profileName: { type: "string", description: "Target workspace profile name" },
+      format: {
+        type: "string",
+        enum: ["markdown", "compact_json"],
+        default: "markdown",
+      },
+    },
+    required: ["issues"],
   },
 };
 
@@ -321,6 +369,12 @@ export async function handleToolCall(
             title: args.title,
             description: args.description,
             priority: args.priority,
+            assignee: args.assignee,
+            project: args.project,
+            estimate: args.estimate,
+            dueDate: args.dueDate,
+            labels: args.labels,
+            state: args.state,
           });
           return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format)}` }] };
         }
@@ -331,6 +385,12 @@ export async function handleToolCall(
             title: args.title,
             description: args.description,
             priority: args.priority,
+            assignee: args.assignee,
+            project: args.project,
+            estimate: args.estimate,
+            dueDate: args.dueDate,
+            labels: args.labels,
+            state: args.state,
           });
           return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(updated, format)}` }] };
         }
@@ -351,6 +411,37 @@ export async function handleToolCall(
         }
 
         throw new Error(`Unsupported action: ${args.action}`);
+      }
+
+      case "linear_bulk_create_issues": {
+        const active = getActiveProfile(args.profileName);
+        const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
+        const items = (args.issues || []).map((i: any) => ({
+          teamIdOrKey: i.team || defaultTeam,
+          title: i.title,
+          description: i.description,
+          priority: i.priority,
+          assignee: i.assignee,
+          project: i.project,
+          estimate: i.estimate,
+          dueDate: i.dueDate,
+          labels: i.labels,
+          state: i.state,
+        }));
+
+        const result = await targetClient.createBulkIssues(items, defaultTeam);
+        const parts: string[] = [];
+        if (result.created.length > 0) {
+          parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format)}`);
+        }
+        if (result.errors.length > 0) {
+          parts.push(
+            `⚠️ Failed to create ${result.errors.length} issue(s):\n${result.errors
+              .map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`)
+              .join("\n")}`
+          );
+        }
+        return { content: [{ type: "text", text: parts.join("\n\n") }] };
       }
 
       case "linear_get_teams_and_projects": {
