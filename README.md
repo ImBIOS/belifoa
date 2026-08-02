@@ -102,6 +102,15 @@ bun x github:ImBIOS/belifoa#canary create --team ENG \
   --labels "backend,security" \
   --state "In Progress"
 
+# Update an existing issue and add a comment
+bun x github:ImBIOS/belifoa#canary update ENG-123 --state "In Progress" --assignee me -c "Started working on fix"
+
+# Close or resolve an issue
+bun x github:ImBIOS/belifoa#canary close ENG-123 -c "Fixed in PR #42"
+
+# List active team labels
+bun x github:ImBIOS/belifoa#canary labels
+
 # Bulk import issues from JSON file
 bun x github:ImBIOS/belifoa#canary import --file tasks.json --team ENG
 ```
