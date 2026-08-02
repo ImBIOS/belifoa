@@ -281,6 +281,12 @@ program
   .requiredOption("--title <title>", "Issue title")
   .option("-d, --description <description>", "Issue description")
   .option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0")
+  .option("-a, --assignee <assignee>", "Assignee user ID, email, or name")
+  .option("--project <project>", "Project name or ID")
+  .option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)")
+  .option("--due-date <date>", "Due date (YYYY-MM-DD)")
+  .option("-l, --labels <labels>", "Comma-separated issue labels")
+  .option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -296,10 +302,66 @@ program
         title: options.title,
         description: options.description,
         priority: parseInt(options.priority),
+        assignee: options.assignee,
+        project: options.project,
+        estimate: options.estimate !== undefined ? parseInt(options.estimate) : undefined,
+        dueDate: options.dueDate,
+        labels: options.labels,
+        state: options.state,
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Bulk create / Import command
+program
+  .command("import")
+  .alias("create-bulk")
+  .description("Bulk create Linear issues from a JSON file")
+  .requiredOption("--file <path>", "Path to JSON file containing array of issues")
+  .option("--profile <profile>", "Target workspace profile")
+  .option("-t, --team <team>", "Default team key/ID if omitted in task items")
+  .option("-f, --format <format>", "Output format", "cli_table")
+  .action(async (options) => {
+    try {
+      const active = getActiveProfile(options.profile);
+      const defaultTeam = options.team || active?.defaultTeam;
+
+      const fileContent = readFileSync(options.file, "utf-8");
+      let data = JSON.parse(fileContent);
+
+      let issuesArray: any[] = [];
+      if (Array.isArray(data)) {
+        issuesArray = data;
+      } else if (Array.isArray(data.issues)) {
+        issuesArray = data.issues;
+      } else if (Array.isArray(data.tasks)) {
+        issuesArray = data.tasks;
+      } else {
+        console.error("❌ Error: JSON file must contain an array of issue objects or { issues: [...] }");
+        process.exit(1);
+      }
+
+      console.log(`📦 Importing ${issuesArray.length} issue(s)...`);
+      const client = new BelifoaClient(undefined, options.profile);
+      const result = await client.createBulkIssues(issuesArray, defaultTeam);
+
+      if (result.created.length > 0) {
+        console.log(`\n✅ Successfully created ${result.created.length} issue(s):`);
+        console.log(formatIssueList(result.created, options.format as OutputFormat));
+      }
+
+      if (result.errors.length > 0) {
+        console.error(`\n⚠️ Failed to create ${result.errors.length} issue(s):`);
+        result.errors.forEach((e) => {
+          console.error(`  - Item #${e.index + 1} ("${e.title}"): ${e.error}`);
+        });
+      }
+    } catch (err: any) {
+      console.error(`❌ Import Error: ${err.message}`);
       process.exit(1);
     }
   });
