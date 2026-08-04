@@ -1,4 +1,5 @@
 import type { LinearIssue, LinearTeam, LinearProject, OutputFormat, AuthProfile } from "./types.js";
+import { getActiveProfile } from "./config.js";
 
 const PRIORITY_LABELS: Record<number, string> = {
   0: "None",
@@ -115,9 +116,37 @@ export function cleanRawIssue(node: any): LinearIssue {
 }
 
 /**
+ * Format a 1-line context header active profile banner
+ * e.g., "[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)"
+ */
+export function formatActiveProfileBanner(profile?: AuthProfile | null, format: OutputFormat = "cli_table"): string {
+  const active = profile === undefined ? getActiveProfile() : profile;
+  if (!active) return "";
+
+  const name = active.name;
+  const org = active.organization?.name || active.organization?.urlKey || "N/A";
+  const team = active.defaultTeam || "N/A";
+
+  if (format === "compact_json" || format === "raw_json") {
+    return "";
+  }
+
+  if (format === "markdown") {
+    return `> **[belifoa] Active Profile**: \`${name}\` (Workspace: **${org}**, Default Team: **${team}**)\n`;
+  }
+
+  // CLI Terminal ANSI Format
+  return `\x1b[1m\x1b[34m[belifoa]\x1b[0m \x1b[1mActive Profile:\x1b[0m \x1b[36m${name}\x1b[0m (\x1b[1mWorkspace:\x1b[0m ${org}, \x1b[1mDefault Team:\x1b[0m ${team})\n`;
+}
+
+/**
  * Format a list of issues into compact agent or clean CLI terminal output
  */
-export function formatIssueList(issues: LinearIssue[], format: OutputFormat = "cli_table"): string {
+export function formatIssueList(
+  issues: LinearIssue[],
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
+): string {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
   }
@@ -135,8 +164,10 @@ export function formatIssueList(issues: LinearIssue[], format: OutputFormat = "c
     );
   }
 
+  const banner = formatActiveProfileBanner(activeProfile, format);
+
   if (issues.length === 0) {
-    return "No issues found.";
+    return (banner ? `${banner}\n` : "") + "No issues found.";
   }
 
   if (format === "markdown") {
@@ -146,13 +177,15 @@ export function formatIssueList(issues: LinearIssue[], format: OutputFormat = "c
       return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
     });
 
-    return [
+    const content = [
       `Found ${issues.length} issue(s):`,
       "",
       "| ID | Title | Status | Priority | Assignee | Labels |",
       "|---|---|---|---|---|---|",
       ...rows,
     ].join("\n");
+
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Table Format
@@ -178,19 +211,25 @@ export function formatIssueList(issues: LinearIssue[], format: OutputFormat = "c
     (r) => `  \x1b[1m\x1b[36m${pad(r.id, maxId)}\x1b[0m  ${pad(r.title, maxTitle)}  \x1b[32m${pad(r.status, maxStatus)}\x1b[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`
   );
 
-  return [
+  const content = [
     `\x1b[1mFound ${issues.length} issue(s):\x1b[0m`,
     "",
     `\x1b[1m${header}\x1b[0m`,
     `\x1b[2m${divider}\x1b[0m`,
     ...body,
   ].join("\n");
+
+  return banner ? `${banner}\n${content}` : content;
 }
 
 /**
  * Format a detailed single issue view
  */
-export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cli_table"): string {
+export function formatIssueDetail(
+  issue: LinearIssue,
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
+): string {
   if (format === "raw_json") {
     return JSON.stringify(issue, null, 2);
   }
@@ -224,6 +263,8 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
     Object.keys(clean).forEach((key) => clean[key] === undefined && delete clean[key]);
     return JSON.stringify(clean);
   }
+
+  const banner = formatActiveProfileBanner(activeProfile, format);
 
   if (format === "markdown") {
     const lines: string[] = [
@@ -265,7 +306,8 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
       });
     }
 
-    return lines.join("\n");
+    const content = lines.join("\n");
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Card View
@@ -306,20 +348,31 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
     });
   }
 
-  return lines.join("\n");
+  const content = lines.join("\n");
+  return banner ? `${banner}\n${content}` : content;
 }
 
 /**
  * Format teams list
  */
-export function formatTeams(teams: LinearTeam[], format: OutputFormat = "cli_table"): string {
+export function formatTeams(
+  teams: LinearTeam[],
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
+): string {
   if (format === "raw_json") return JSON.stringify(teams, null, 2);
   if (format === "compact_json") return JSON.stringify(teams.map((t) => ({ key: t.key, name: t.name, id: t.id })));
-  if (teams.length === 0) return "No teams found.";
+
+  const banner = formatActiveProfileBanner(activeProfile, format);
+
+  if (teams.length === 0) {
+    return (banner ? `${banner}\n` : "") + "No teams found.";
+  }
 
   if (format === "markdown") {
     const rows = teams.map((t) => `| **${t.key}** | ${t.name} | \`${t.id}\` |`);
-    return ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join("\n");
+    const content = ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join("\n");
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Table Format
@@ -332,33 +385,44 @@ export function formatTeams(teams: LinearTeam[], format: OutputFormat = "cli_tab
 
   const body = teams.map((t) => `  \x1b[1m\x1b[36m${pad(t.key, maxKey)}\x1b[0m  ${pad(t.name, maxName)}  \x1b[2m${pad(t.id, maxId)}\x1b[0m`);
 
-  return [
+  const content = [
     `\x1b[1m👥 Linear Teams:\x1b[0m`,
     "",
     `\x1b[1m${header}\x1b[0m`,
     `\x1b[2m${divider}\x1b[0m`,
     ...body,
   ].join("\n");
+
+  return banner ? `${banner}\n${content}` : content;
 }
 
 /**
  * Format projects list
  */
-export function formatProjects(projects: LinearProject[], format: OutputFormat = "cli_table"): string {
+export function formatProjects(
+  projects: LinearProject[],
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
+): string {
   if (format === "raw_json") return JSON.stringify(projects, null, 2);
   if (format === "compact_json")
     return JSON.stringify(
       projects.map((p) => ({ name: p.name, state: p.state, progress: p.progress ? `${Math.round(p.progress * 100)}%` : undefined }))
     );
 
-  if (projects.length === 0) return "No projects found.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+
+  if (projects.length === 0) {
+    return (banner ? `${banner}\n` : "") + "No projects found.";
+  }
 
   if (format === "markdown") {
     const rows = projects.map((p) => {
       const progStr = p.progress !== undefined ? `${Math.round(p.progress * 100)}%` : "N/A";
       return `| ${p.name} | ${p.state || "Active"} | ${progStr} |`;
     });
-    return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join("\n");
+    const content = ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows].join("\n");
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Table Format
@@ -377,13 +441,15 @@ export function formatProjects(projects: LinearProject[], format: OutputFormat =
 
   const body = rows.map((r) => `  \x1b[1m${pad(r.name, maxName)}\x1b[0m  \x1b[32m${pad(r.state, maxState)}\x1b[0m  ${pad(r.progress, maxProg)}`);
 
-  return [
+  const content = [
     `\x1b[1m📁 Linear Projects:\x1b[0m`,
     "",
     `\x1b[1m${header}\x1b[0m`,
     `\x1b[2m${divider}\x1b[0m`,
     ...body,
   ].join("\n");
+
+  return banner ? `${banner}\n${content}` : content;
 }
 
 /**
@@ -391,7 +457,8 @@ export function formatProjects(projects: LinearProject[], format: OutputFormat =
  */
 export function formatProfiles(
   profiles: Array<{ profile: AuthProfile; isActive: boolean }>,
-  format: OutputFormat = "cli_table"
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
 ): string {
   if (format === "raw_json") return JSON.stringify(profiles, null, 2);
   if (format === "compact_json") {
@@ -406,7 +473,11 @@ export function formatProfiles(
     );
   }
 
-  if (profiles.length === 0) return "❌ No authentication profiles saved.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+
+  if (profiles.length === 0) {
+    return (banner ? `${banner}\n` : "") + "❌ No authentication profiles saved.";
+  }
 
   if (format === "markdown") {
     const rows = profiles.map(({ profile, isActive }) => {
@@ -417,13 +488,15 @@ export function formatProfiles(
       return `| **${profile.name}** | ${orgStr} | ${teamsStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
     });
 
-    return [
+    const content = [
       "### 🔐 Saved Linear Authentication Profiles (Workspaces):",
       "",
       "| Profile | Workspace / Org | Accessible Teams | Default Team | API Key | Status |",
       "|---|---|---|---|---|---|",
       ...rows,
     ].join("\n");
+
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Table Format
@@ -452,7 +525,7 @@ export function formatProfiles(
     return r.isActive ? `\x1b[1m\x1b[32m${rowStr}\x1b[0m` : rowStr;
   });
 
-  return [
+  const content = [
     "\x1b[1m\x1b[36m🔐 Saved Linear Authentication Profiles (Workspaces):\x1b[0m",
     "",
     `\x1b[1m${header}\x1b[0m`,
@@ -460,6 +533,8 @@ export function formatProfiles(
     ...body,
     "",
   ].join("\n");
+
+  return banner ? `${banner}\n${content}` : content;
 }
 
 /**
@@ -467,15 +542,22 @@ export function formatProfiles(
  */
 export function formatLabels(
   labels: Array<{ id: string; name: string }>,
-  format: OutputFormat = "cli_table"
+  format: OutputFormat = "cli_table",
+  activeProfile?: AuthProfile | null
 ): string {
   if (format === "raw_json") return JSON.stringify(labels, null, 2);
   if (format === "compact_json") return JSON.stringify(labels.map((l) => ({ name: l.name, id: l.id })));
-  if (labels.length === 0) return "No labels found.";
+
+  const banner = formatActiveProfileBanner(activeProfile, format);
+
+  if (labels.length === 0) {
+    return (banner ? `${banner}\n` : "") + "No labels found.";
+  }
 
   if (format === "markdown") {
     const rows = labels.map((l) => `| **${l.name}** | \`${l.id}\` |`);
-    return ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join("\n");
+    const content = ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join("\n");
+    return banner ? `${banner}\n${content}` : content;
   }
 
   // CLI Terminal Table Format
@@ -487,12 +569,14 @@ export function formatLabels(
 
   const body = labels.map((l) => `  \x1b[1m\x1b[36m${pad(l.name, maxName)}\x1b[0m  \x1b[2m${pad(l.id, maxId)}\x1b[0m`);
 
-  return [
+  const content = [
     `\x1b[1m🏷️ Linear Issue Labels (${labels.length}):\x1b[0m`,
     "",
     `\x1b[1m${header}\x1b[0m`,
     `\x1b[2m${divider}\x1b[0m`,
     ...body,
   ].join("\n");
+
+  return banner ? `${banner}\n${content}` : content;
 }
 

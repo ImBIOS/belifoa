@@ -4,17 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { BelifoaClient } from "../core/client.js";
 import {
-  authStatusToolSchema,
-  authListToolSchema,
-  authSwitchToolSchema,
-  setApiKeyToolSchema,
-  getIssueToolSchema,
-  searchIssuesToolSchema,
-  getMyIssuesToolSchema,
-  manageIssueToolSchema,
-  bulkCreateIssuesToolSchema,
-  getTeamsAndProjectsToolSchema,
-  getLabelsToolSchema,
+  getMcpToolSchemas,
   handleToolCall,
 } from "./tools.js";
 
@@ -22,7 +12,7 @@ export async function startMcpServer() {
   const server = new Server(
     {
       name: "belifoa",
-      version: "0.4.0",
+      version: "0.5.0",
     },
     {
       capabilities: {
@@ -35,19 +25,7 @@ export async function startMcpServer() {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-      tools: [
-        authStatusToolSchema,
-        authListToolSchema,
-        authSwitchToolSchema,
-        setApiKeyToolSchema,
-        getIssueToolSchema,
-        searchIssuesToolSchema,
-        getMyIssuesToolSchema,
-        manageIssueToolSchema,
-        bulkCreateIssuesToolSchema,
-        getTeamsAndProjectsToolSchema,
-        getLabelsToolSchema,
-      ],
+      tools: getMcpToolSchemas(),
     };
   });
 

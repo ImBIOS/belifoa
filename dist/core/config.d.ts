@@ -2,7 +2,7 @@ import type { BelifoaConfig, AuthProfile, LinearOrganization } from "./types.js"
 export declare function loadConfig(): BelifoaConfig;
 export declare function saveConfig(config: BelifoaConfig): void;
 /**
- * Search upwards for project-local .belifoarc.json, .belifoa, or .belifoa.json configuration
+ * Search upwards and downwards in directory tree for project-local .belifoarc.json, .belifoa, .belifoa.json, or .mcp.json
  */
 export declare function getProjectConfig(startDir?: string): {
     profile?: string;

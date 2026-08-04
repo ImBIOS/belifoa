@@ -26,6 +26,10 @@ export class BelifoaClient {
     this.apiKey = key;
   }
 
+  public getProfileName(): string | undefined {
+    return this.profileName;
+  }
+
   public getApiKey(): string {
     return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
   }

@@ -268,6 +268,63 @@ export const getLabelsToolSchema = {
   },
 };
 
+export function getMcpToolSchemas(overrideProfileName?: string): Array<{ name: string; description: string; inputSchema: any }> {
+  const active = getActiveProfile(overrideProfileName);
+  const profileName = active?.name || overrideProfileName || "default";
+  const prefix = `belifoa_${profileName}_`;
+
+  return [
+    { ...authStatusToolSchema, name: `${prefix}auth_status` },
+    { ...authListToolSchema, name: `${prefix}auth_list` },
+    { ...authSwitchToolSchema, name: `${prefix}auth_switch` },
+    { ...setApiKeyToolSchema, name: `${prefix}set_api_key` },
+    { ...getIssueToolSchema, name: `${prefix}get_issue` },
+    { ...searchIssuesToolSchema, name: `${prefix}search_issues` },
+    { ...getMyIssuesToolSchema, name: `${prefix}get_my_issues` },
+    { ...manageIssueToolSchema, name: `${prefix}manage_issue` },
+    {
+      name: `${prefix}create_issue`,
+      description: "Create a new Linear issue in the workspace.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          teamKey: { type: "string", description: "Team key (e.g. ENG). Uses default team if omitted." },
+          title: { type: "string", description: "Issue title" },
+          description: { type: "string", description: "Issue description" },
+          priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+          assignee: { type: "string", description: "Assignee user ID, email, or name" },
+          project: { type: "string", description: "Project name or ID" },
+          estimate: { type: "number", description: "Story points estimate" },
+          dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+          labels: { type: "array", items: { type: "string" } },
+          state: { type: "string", description: "Initial workflow state" },
+          parentId: { type: "string", description: "Parent issue ID" },
+          profileName: { type: "string", description: "Target workspace profile name" },
+          format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" },
+        },
+        required: ["title"],
+      },
+    },
+    {
+      name: `${prefix}list_issues`,
+      description: "List or search issues for a team or query in the workspace.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query or keyword" },
+          teamKey: { type: "string", description: "Team key filter (e.g. 'ENG')" },
+          limit: { type: "number", default: 15 },
+          profileName: { type: "string", description: "Target workspace profile name" },
+          format: { type: "string", enum: ["markdown", "compact_json", "raw_json"], default: "markdown" },
+        },
+      },
+    },
+    { ...bulkCreateIssuesToolSchema, name: `${prefix}bulk_create_issues` },
+    { ...getTeamsAndProjectsToolSchema, name: `${prefix}get_teams_and_projects` },
+    { ...getLabelsToolSchema, name: `${prefix}get_labels` },
+  ];
+}
+
 export function getAuthGuidanceMessage(): string {
   const profiles = listProfiles();
   const profileListStr = profiles.length > 0
@@ -292,19 +349,86 @@ export function getAuthGuidanceMessage(): string {
   ].join("\n");
 }
 
+const KNOWN_BASE_ACTIONS = new Set([
+  "auth_status",
+  "auth_list",
+  "auth_switch",
+  "set_api_key",
+  "get_issue",
+  "search_issues",
+  "get_my_issues",
+  "manage_issue",
+  "create_issue",
+  "update_issue",
+  "close_issue",
+  "resolve_issue",
+  "list_issues",
+  "my_issues",
+  "issue",
+  "bulk_create_issues",
+  "get_teams_and_projects",
+  "get_labels",
+]);
+
 export async function handleToolCall(
   name: string,
   args: any,
   client: BelifoaClient
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const format: OutputFormat = args.format || "markdown";
-  const targetClient = args.profileName ? new BelifoaClient(undefined, args.profileName) : client;
+
+  let cleanName = name;
+  let prefixProfile: string | undefined = undefined;
+
+  const rest = name.replace(/^(?:belifoa|linear)_/, "");
+  if (KNOWN_BASE_ACTIONS.has(rest)) {
+    cleanName = rest;
+  } else {
+    const idx = rest.indexOf("_");
+    if (idx !== -1) {
+      const possibleProf = rest.substring(0, idx);
+      const possibleAction = rest.substring(idx + 1);
+      if (KNOWN_BASE_ACTIONS.has(possibleAction)) {
+        prefixProfile = possibleProf;
+        cleanName = possibleAction;
+      } else {
+        cleanName = rest;
+      }
+    } else {
+      cleanName = rest;
+    }
+  }
+
+  if (prefixProfile && !args.profileName) {
+    args.profileName = prefixProfile;
+  }
+
+  const active = getActiveProfile(args.profileName);
+  const targetClient =
+    args.profileName && args.profileName !== client.getProfileName() && client.getProfileName() !== undefined
+      ? new BelifoaClient(undefined, args.profileName)
+      : client;
+
+  // Aliases normalization
+  if (cleanName === "create_issue") {
+    args.action = "create";
+    cleanName = "manage_issue";
+  } else if (cleanName === "update_issue") {
+    args.action = "update";
+    cleanName = "manage_issue";
+  } else if (cleanName === "close_issue" || cleanName === "resolve_issue") {
+    args.action = "close";
+    cleanName = "manage_issue";
+  } else if (cleanName === "list_issues" || cleanName === "my_issues") {
+    cleanName = args.query ? "search_issues" : "get_my_issues";
+  } else if (cleanName === "issue") {
+    cleanName = "get_issue";
+  }
 
   try {
-    switch (name) {
-      case "linear_auth_status": {
+    switch (cleanName) {
+      case "auth_status": {
         try {
-          const active = getActiveProfile(args.profileName);
           const me = await targetClient.getMe();
           const org = await targetClient.getOrganization();
           return {
@@ -325,12 +449,12 @@ export async function handleToolCall(
         }
       }
 
-      case "linear_auth_list": {
+      case "auth_list": {
         const profiles = listProfiles();
-        return { content: [{ type: "text", text: formatProfiles(profiles, format) }] };
+        return { content: [{ type: "text", text: formatProfiles(profiles, format, active) }] };
       }
 
-      case "linear_auth_switch": {
+      case "auth_switch": {
         let msgParts: string[] = [];
         if (args.profileName) {
           const profile = switchProfile(args.profileName);
@@ -357,7 +481,7 @@ export async function handleToolCall(
         };
       }
 
-      case "linear_set_api_key": {
+      case "set_api_key": {
         if (!args.apiKey || typeof args.apiKey !== "string") {
           throw new Error("apiKey parameter is required.");
         }
@@ -391,28 +515,26 @@ export async function handleToolCall(
         };
       }
 
-      case "linear_get_issue": {
+      case "get_issue": {
         const issue = await targetClient.getIssue(args.id);
-        return { content: [{ type: "text", text: formatIssueDetail(issue, format) }] };
+        return { content: [{ type: "text", text: formatIssueDetail(issue, format, active) }] };
       }
 
-      case "linear_search_issues": {
-        const active = getActiveProfile(args.profileName);
+      case "search_issues": {
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await targetClient.searchIssues(args.query, {
+        const issues = await targetClient.searchIssues(args.query || "", {
           teamKey,
           limit: args.limit,
         });
-        return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
+        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
       }
 
-      case "linear_get_my_issues": {
+      case "get_my_issues": {
         const issues = await targetClient.getMyIssues(args.limit || 20);
-        return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
+        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
       }
 
-      case "linear_manage_issue": {
-        const active = getActiveProfile(args.profileName);
+      case "manage_issue": {
         if (args.action === "bulk_create") {
           const defaultTeam = args.teamKey || active?.defaultTeam;
           const items = (args.issues || []).map((i: any) => ({
@@ -434,7 +556,7 @@ export async function handleToolCall(
           const result = await targetClient.createBulkIssues(items, defaultTeam);
           const parts: string[] = [];
           if (result.created.length > 0) {
-            parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format)}`);
+            parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format, active)}`);
           }
           if (result.errors.length > 0) {
             parts.push(
@@ -466,7 +588,7 @@ export async function handleToolCall(
             blockedBy: args.blockedBy,
             blocks: args.blocks,
           });
-          return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format)}` }] };
+          return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format, active)}` }] };
         }
 
         if (args.action === "update") {
@@ -488,9 +610,9 @@ export async function handleToolCall(
           if (args.commentBody) {
             await targetClient.addComment(args.issueId, args.commentBody);
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
-            return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(refreshed, format)}` }] };
+            return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(refreshed, format, active)}` }] };
           }
-          return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(updated, format)}` }] };
+          return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(updated, format, active)}` }] };
         }
 
         if (args.action === "close" || args.action === "resolve") {
@@ -500,7 +622,7 @@ export async function handleToolCall(
             await targetClient.addComment(args.issueId, args.commentBody);
           }
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
-          return { content: [{ type: "text", text: `✅ Closed/Resolved issue ${args.issueId}:\n\n${formatIssueDetail(refreshed, format)}` }] };
+          return { content: [{ type: "text", text: `✅ Closed/Resolved issue ${args.issueId}:\n\n${formatIssueDetail(refreshed, format, active)}` }] };
         }
 
         if (args.action === "comment") {
@@ -521,8 +643,7 @@ export async function handleToolCall(
         throw new Error(`Unsupported action: ${args.action}`);
       }
 
-      case "linear_bulk_create_issues": {
-        const active = getActiveProfile(args.profileName);
+      case "bulk_create_issues": {
         const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
         const items = (args.issues || []).map((i: any) => ({
           teamIdOrKey: i.team || defaultTeam,
@@ -543,7 +664,7 @@ export async function handleToolCall(
         const result = await targetClient.createBulkIssues(items, defaultTeam);
         const parts: string[] = [];
         if (result.created.length > 0) {
-          parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format)}`);
+          parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format, active)}`);
         }
         if (result.errors.length > 0) {
           parts.push(
@@ -555,16 +676,16 @@ export async function handleToolCall(
         return { content: [{ type: "text", text: parts.join("\n\n") }] };
       }
 
-      case "linear_get_teams_and_projects": {
+      case "get_teams_and_projects": {
         const teams = await targetClient.getTeams();
         const projects = await targetClient.getProjects();
-        const text = [formatTeams(teams, format), "", formatProjects(projects, format)].join("\n");
+        const text = [formatTeams(teams, format, active), "", formatProjects(projects, format, active)].join("\n");
         return { content: [{ type: "text", text }] };
       }
 
-      case "linear_get_labels": {
+      case "get_labels": {
         const labels = await targetClient.getIssueLabels();
-        return { content: [{ type: "text", text: formatLabels(labels, format) }] };
+        return { content: [{ type: "text", text: formatLabels(labels, format, active) }] };
       }
 
       default:

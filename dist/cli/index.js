@@ -13065,7 +13065,7 @@ var init_stdio2 = __esm(() => {
 });
 
 // src/core/config.ts
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
@@ -13107,36 +13107,98 @@ function saveConfig(config2) {
   }
   writeFileSync(configFile, JSON.stringify(config2, null, 2), "utf-8");
 }
+function checkDirectoryForConfig(dir) {
+  const jsonFile = join(dir, ".belifoarc.json");
+  if (existsSync(jsonFile)) {
+    try {
+      const content = readFileSync(jsonFile, "utf-8");
+      return JSON.parse(content);
+    } catch {}
+  }
+  const dotFile = join(dir, ".belifoa");
+  if (existsSync(dotFile)) {
+    try {
+      const content = readFileSync(dotFile, "utf-8");
+      return JSON.parse(content);
+    } catch {}
+  }
+  const dotJsonFile = join(dir, ".belifoa.json");
+  if (existsSync(dotJsonFile)) {
+    try {
+      const content = readFileSync(dotJsonFile, "utf-8");
+      return JSON.parse(content);
+    } catch {}
+  }
+  const mcpFile = join(dir, ".mcp.json");
+  if (existsSync(mcpFile)) {
+    try {
+      const content = readFileSync(mcpFile, "utf-8");
+      const data = JSON.parse(content);
+      let profile = undefined;
+      let team = undefined;
+      if (data.mcpServers) {
+        for (const [key, server] of Object.entries(data.mcpServers)) {
+          if (key.toLowerCase().includes("belifoa") || key.toLowerCase().includes("linear")) {
+            if (server.env?.BELIFOA_PROFILE)
+              profile = server.env.BELIFOA_PROFILE;
+            if (server.env?.BELIFOA_DEFAULT_TEAM)
+              team = server.env.BELIFOA_DEFAULT_TEAM;
+          }
+        }
+      }
+      if (!profile && data.env?.BELIFOA_PROFILE)
+        profile = data.env.BELIFOA_PROFILE;
+      if (!profile && data.profile)
+        profile = data.profile;
+      if (!profile && data.belifoaProfile)
+        profile = data.belifoaProfile;
+      if (!team && data.env?.BELIFOA_DEFAULT_TEAM)
+        team = data.env.BELIFOA_DEFAULT_TEAM;
+      if (!team && data.defaultTeam)
+        team = data.defaultTeam;
+      if (profile || team) {
+        return { profile, team };
+      }
+    } catch {}
+  }
+  return null;
+}
+function scanChildDirectoriesForConfig(dir, depth = 0, maxDepth = 2) {
+  if (depth > maxDepth)
+    return null;
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory())
+        continue;
+      const name = entry.name;
+      if (name.startsWith(".") || name === "node_modules" || name === "dist" || name === "build")
+        continue;
+      const childDir = join(dir, name);
+      const conf = checkDirectoryForConfig(childDir);
+      if (conf)
+        return conf;
+      if (depth < maxDepth) {
+        const subConf = scanChildDirectoriesForConfig(childDir, depth + 1, maxDepth);
+        if (subConf)
+          return subConf;
+      }
+    }
+  } catch {}
+  return null;
+}
 function getProjectConfig(startDir = process.cwd()) {
   let currentDir = startDir;
   while (true) {
-    const jsonFile = join(currentDir, ".belifoarc.json");
-    if (existsSync(jsonFile)) {
-      try {
-        const content = readFileSync(jsonFile, "utf-8");
-        return JSON.parse(content);
-      } catch {}
-    }
-    const dotFile = join(currentDir, ".belifoa");
-    if (existsSync(dotFile)) {
-      try {
-        const content = readFileSync(dotFile, "utf-8");
-        return JSON.parse(content);
-      } catch {}
-    }
-    const dotJsonFile = join(currentDir, ".belifoa.json");
-    if (existsSync(dotJsonFile)) {
-      try {
-        const content = readFileSync(dotJsonFile, "utf-8");
-        return JSON.parse(content);
-      } catch {}
-    }
+    const conf = checkDirectoryForConfig(currentDir);
+    if (conf)
+      return conf;
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir)
       break;
     currentDir = parentDir;
   }
-  return null;
+  return scanChildDirectoriesForConfig(startDir);
 }
 function getGitRemoteUrl(cwd = process.cwd()) {
   try {
@@ -13383,7 +13445,24 @@ function cleanRawIssue(node) {
     gitBranchName
   };
 }
-function formatIssueList(issues, format = "cli_table") {
+function formatActiveProfileBanner(profile, format = "cli_table") {
+  const active = profile === undefined ? getActiveProfile() : profile;
+  if (!active)
+    return "";
+  const name = active.name;
+  const org = active.organization?.name || active.organization?.urlKey || "N/A";
+  const team = active.defaultTeam || "N/A";
+  if (format === "compact_json" || format === "raw_json") {
+    return "";
+  }
+  if (format === "markdown") {
+    return `> **[belifoa] Active Profile**: \`${name}\` (Workspace: **${org}**, Default Team: **${team}**)
+`;
+  }
+  return `\x1B[1m\x1B[34m[belifoa]\x1B[0m \x1B[1mActive Profile:\x1B[0m \x1B[36m${name}\x1B[0m (\x1B[1mWorkspace:\x1B[0m ${org}, \x1B[1mDefault Team:\x1B[0m ${team})
+`;
+}
+function formatIssueList(issues, format = "cli_table", activeProfile) {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
   }
@@ -13397,8 +13476,10 @@ function formatIssueList(issues, format = "cli_table") {
       labels: i.labels?.length ? i.labels : undefined
     })));
   }
+  const banner = formatActiveProfileBanner(activeProfile, format);
   if (issues.length === 0) {
-    return "No issues found.";
+    return (banner ? `${banner}
+` : "") + "No issues found.";
   }
   if (format === "markdown") {
     const rows2 = issues.map((i) => {
@@ -13406,7 +13487,7 @@ function formatIssueList(issues, format = "cli_table") {
       const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
       return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
     });
-    return [
+    const content2 = [
       `Found ${issues.length} issue(s):`,
       "",
       "| ID | Title | Status | Priority | Assignee | Labels |",
@@ -13414,6 +13495,8 @@ function formatIssueList(issues, format = "cli_table") {
       ...rows2
     ].join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const rows = issues.map((i) => ({
     id: i.identifier,
@@ -13431,7 +13514,7 @@ function formatIssueList(issues, format = "cli_table") {
   const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}`;
   const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}`;
   const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`);
-  return [
+  const content = [
     `\x1B[1mFound ${issues.length} issue(s):\x1B[0m`,
     "",
     `\x1B[1m${header}\x1B[0m`,
@@ -13439,8 +13522,10 @@ function formatIssueList(issues, format = "cli_table") {
     ...body
   ].join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
-function formatIssueDetail(issue2, format = "cli_table") {
+function formatIssueDetail(issue2, format = "cli_table", activeProfile) {
   if (format === "raw_json") {
     return JSON.stringify(issue2, null, 2);
   }
@@ -13473,6 +13558,7 @@ function formatIssueDetail(issue2, format = "cli_table") {
     Object.keys(clean).forEach((key) => clean[key] === undefined && delete clean[key]);
     return JSON.stringify(clean);
   }
+  const banner = formatActiveProfileBanner(activeProfile, format);
   if (format === "markdown") {
     const lines2 = [
       `# [${issue2.identifier}] ${issue2.title}`,
@@ -13514,8 +13600,10 @@ function formatIssueDetail(issue2, format = "cli_table") {
 > `)}`, "");
       });
     }
-    return lines2.join(`
+    const content2 = lines2.join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const lines = [
     `\x1B[1m\x1B[36m[${issue2.identifier}]\x1B[0m \x1B[1m${issue2.title}\x1B[0m`,
@@ -13557,20 +13645,27 @@ function formatIssueDetail(issue2, format = "cli_table") {
      `)}`);
     });
   }
-  return lines.join(`
+  const content = lines.join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
-function formatTeams(teams, format = "cli_table") {
+function formatTeams(teams, format = "cli_table", activeProfile) {
   if (format === "raw_json")
     return JSON.stringify(teams, null, 2);
   if (format === "compact_json")
     return JSON.stringify(teams.map((t) => ({ key: t.key, name: t.name, id: t.id })));
-  if (teams.length === 0)
-    return "No teams found.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+  if (teams.length === 0) {
+    return (banner ? `${banner}
+` : "") + "No teams found.";
+  }
   if (format === "markdown") {
     const rows = teams.map((t) => `| **${t.key}** | ${t.name} | \`${t.id}\` |`);
-    return ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join(`
+    const content2 = ["### Teams:", "", "| Key | Name | ID |", "|---|---|---|", ...rows].join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const maxKey = Math.max(6, ...teams.map((t) => t.key.length));
   const maxName = Math.max(20, ...teams.map((t) => t.name.length));
@@ -13578,7 +13673,7 @@ function formatTeams(teams, format = "cli_table") {
   const header = `  ${pad("KEY", maxKey)}  ${pad("NAME", maxName)}  ${pad("ID", maxId)}`;
   const divider = `  ${"\u2500".repeat(maxKey)}  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxId)}`;
   const body = teams.map((t) => `  \x1B[1m\x1B[36m${pad(t.key, maxKey)}\x1B[0m  ${pad(t.name, maxName)}  \x1B[2m${pad(t.id, maxId)}\x1B[0m`);
-  return [
+  const content = [
     `\x1B[1m\uD83D\uDC65 Linear Teams:\x1B[0m`,
     "",
     `\x1B[1m${header}\x1B[0m`,
@@ -13586,21 +13681,28 @@ function formatTeams(teams, format = "cli_table") {
     ...body
   ].join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
-function formatProjects(projects, format = "cli_table") {
+function formatProjects(projects, format = "cli_table", activeProfile) {
   if (format === "raw_json")
     return JSON.stringify(projects, null, 2);
   if (format === "compact_json")
     return JSON.stringify(projects.map((p) => ({ name: p.name, state: p.state, progress: p.progress ? `${Math.round(p.progress * 100)}%` : undefined })));
-  if (projects.length === 0)
-    return "No projects found.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+  if (projects.length === 0) {
+    return (banner ? `${banner}
+` : "") + "No projects found.";
+  }
   if (format === "markdown") {
     const rows2 = projects.map((p) => {
       const progStr = p.progress !== undefined ? `${Math.round(p.progress * 100)}%` : "N/A";
       return `| ${p.name} | ${p.state || "Active"} | ${progStr} |`;
     });
-    return ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows2].join(`
+    const content2 = ["### Projects:", "", "| Name | State | Progress |", "|---|---|---|", ...rows2].join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const rows = projects.map((p) => ({
     name: p.name,
@@ -13613,7 +13715,7 @@ function formatProjects(projects, format = "cli_table") {
   const header = `  ${pad("PROJECT NAME", maxName)}  ${pad("STATE", maxState)}  ${pad("PROGRESS", maxProg)}`;
   const divider = `  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxState)}  ${"\u2500".repeat(maxProg)}`;
   const body = rows.map((r) => `  \x1B[1m${pad(r.name, maxName)}\x1B[0m  \x1B[32m${pad(r.state, maxState)}\x1B[0m  ${pad(r.progress, maxProg)}`);
-  return [
+  const content = [
     `\x1B[1m\uD83D\uDCC1 Linear Projects:\x1B[0m`,
     "",
     `\x1B[1m${header}\x1B[0m`,
@@ -13621,8 +13723,10 @@ function formatProjects(projects, format = "cli_table") {
     ...body
   ].join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
-function formatProfiles(profiles, format = "cli_table") {
+function formatProfiles(profiles, format = "cli_table", activeProfile) {
   if (format === "raw_json")
     return JSON.stringify(profiles, null, 2);
   if (format === "compact_json") {
@@ -13634,8 +13738,11 @@ function formatProfiles(profiles, format = "cli_table") {
       defaultTeam: profile.defaultTeam || "N/A"
     })));
   }
-  if (profiles.length === 0)
-    return "\u274C No authentication profiles saved.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+  if (profiles.length === 0) {
+    return (banner ? `${banner}
+` : "") + "\u274C No authentication profiles saved.";
+  }
   if (format === "markdown") {
     const rows2 = profiles.map(({ profile, isActive }) => {
       const activeMarker = isActive ? "\u2705 **Active**" : "-";
@@ -13644,7 +13751,7 @@ function formatProfiles(profiles, format = "cli_table") {
       const keyMasked = profile.apiKey ? `${profile.apiKey.substring(0, 11)}...` : "N/A";
       return `| **${profile.name}** | ${orgStr} | ${teamsStr} | \`${profile.defaultTeam || "None"}\` | \`${keyMasked}\` | ${activeMarker} |`;
     });
-    return [
+    const content2 = [
       "### \uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):",
       "",
       "| Profile | Workspace / Org | Accessible Teams | Default Team | API Key | Status |",
@@ -13652,6 +13759,8 @@ function formatProfiles(profiles, format = "cli_table") {
       ...rows2
     ].join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const rows = profiles.map(({ profile, isActive }) => {
     const status = isActive ? "\u2705 Active" : "   -   ";
@@ -13674,7 +13783,7 @@ function formatProfiles(profiles, format = "cli_table") {
     const rowStr = `  ${pad(r.status, maxStatus)}  ${pad(r.name, maxName)}  ${pad(r.org, maxOrg)}  ${pad(r.teamsStr, maxTeams)}  ${pad(r.team, maxTeam)}  ${pad(r.key, maxKey)}`;
     return r.isActive ? `\x1B[1m\x1B[32m${rowStr}\x1B[0m` : rowStr;
   });
-  return [
+  const content = [
     "\x1B[1m\x1B[36m\uD83D\uDD10 Saved Linear Authentication Profiles (Workspaces):\x1B[0m",
     "",
     `\x1B[1m${header}\x1B[0m`,
@@ -13683,25 +13792,32 @@ function formatProfiles(profiles, format = "cli_table") {
     ""
   ].join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
-function formatLabels(labels, format = "cli_table") {
+function formatLabels(labels, format = "cli_table", activeProfile) {
   if (format === "raw_json")
     return JSON.stringify(labels, null, 2);
   if (format === "compact_json")
     return JSON.stringify(labels.map((l) => ({ name: l.name, id: l.id })));
-  if (labels.length === 0)
-    return "No labels found.";
+  const banner = formatActiveProfileBanner(activeProfile, format);
+  if (labels.length === 0) {
+    return (banner ? `${banner}
+` : "") + "No labels found.";
+  }
   if (format === "markdown") {
     const rows = labels.map((l) => `| **${l.name}** | \`${l.id}\` |`);
-    return ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join(`
+    const content2 = ["### Issue Labels:", "", "| Name | ID |", "|---|---|", ...rows].join(`
 `);
+    return banner ? `${banner}
+${content2}` : content2;
   }
   const maxName = Math.max(15, ...labels.map((l) => l.name.length));
   const maxId = Math.max(10, ...labels.map((l) => l.id.length));
   const header = `  ${pad("LABEL NAME", maxName)}  ${pad("ID", maxId)}`;
   const divider = `  ${"\u2500".repeat(maxName)}  ${"\u2500".repeat(maxId)}`;
   const body = labels.map((l) => `  \x1B[1m\x1B[36m${pad(l.name, maxName)}\x1B[0m  \x1B[2m${pad(l.id, maxId)}\x1B[0m`);
-  return [
+  const content = [
     `\x1B[1m\uD83C\uDFF7\uFE0F Linear Issue Labels (${labels.length}):\x1B[0m`,
     "",
     `\x1B[1m${header}\x1B[0m`,
@@ -13709,9 +13825,12 @@ function formatLabels(labels, format = "cli_table") {
     ...body
   ].join(`
 `);
+  return banner ? `${banner}
+${content}` : content;
 }
 var PRIORITY_LABELS;
 var init_formatters = __esm(() => {
+  init_config();
   PRIORITY_LABELS = {
     0: "None",
     1: "Urgent \uD83D\uDD34",
@@ -13744,6 +13863,9 @@ class BelifoaClient {
   }
   setApiKey(key) {
     this.apiKey = key;
+  }
+  getProfileName() {
+    return this.profileName;
   }
   getApiKey() {
     return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
@@ -14319,6 +14441,61 @@ var init_client = __esm(() => {
 });
 
 // src/mcp/tools.ts
+function getMcpToolSchemas(overrideProfileName) {
+  const active = getActiveProfile(overrideProfileName);
+  const profileName = active?.name || overrideProfileName || "default";
+  const prefix = `belifoa_${profileName}_`;
+  return [
+    { ...authStatusToolSchema, name: `${prefix}auth_status` },
+    { ...authListToolSchema, name: `${prefix}auth_list` },
+    { ...authSwitchToolSchema, name: `${prefix}auth_switch` },
+    { ...setApiKeyToolSchema, name: `${prefix}set_api_key` },
+    { ...getIssueToolSchema, name: `${prefix}get_issue` },
+    { ...searchIssuesToolSchema, name: `${prefix}search_issues` },
+    { ...getMyIssuesToolSchema, name: `${prefix}get_my_issues` },
+    { ...manageIssueToolSchema, name: `${prefix}manage_issue` },
+    {
+      name: `${prefix}create_issue`,
+      description: "Create a new Linear issue in the workspace.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          teamKey: { type: "string", description: "Team key (e.g. ENG). Uses default team if omitted." },
+          title: { type: "string", description: "Issue title" },
+          description: { type: "string", description: "Issue description" },
+          priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+          assignee: { type: "string", description: "Assignee user ID, email, or name" },
+          project: { type: "string", description: "Project name or ID" },
+          estimate: { type: "number", description: "Story points estimate" },
+          dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+          labels: { type: "array", items: { type: "string" } },
+          state: { type: "string", description: "Initial workflow state" },
+          parentId: { type: "string", description: "Parent issue ID" },
+          profileName: { type: "string", description: "Target workspace profile name" },
+          format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" }
+        },
+        required: ["title"]
+      }
+    },
+    {
+      name: `${prefix}list_issues`,
+      description: "List or search issues for a team or query in the workspace.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query or keyword" },
+          teamKey: { type: "string", description: "Team key filter (e.g. 'ENG')" },
+          limit: { type: "number", default: 15 },
+          profileName: { type: "string", description: "Target workspace profile name" },
+          format: { type: "string", enum: ["markdown", "compact_json", "raw_json"], default: "markdown" }
+        }
+      }
+    },
+    { ...bulkCreateIssuesToolSchema, name: `${prefix}bulk_create_issues` },
+    { ...getTeamsAndProjectsToolSchema, name: `${prefix}get_teams_and_projects` },
+    { ...getLabelsToolSchema, name: `${prefix}get_labels` }
+  ];
+}
 function getAuthGuidanceMessage() {
   const profiles = listProfiles();
   const profileListStr = profiles.length > 0 ? `Saved Profiles: ${profiles.map((p) => p.profile.name + (p.isActive ? " (Active)" : "")).join(", ")}` : "No profiles saved yet.";
@@ -14342,12 +14519,49 @@ function getAuthGuidanceMessage() {
 }
 async function handleToolCall(name, args, client) {
   const format = args.format || "markdown";
-  const targetClient = args.profileName ? new BelifoaClient(undefined, args.profileName) : client;
+  let cleanName = name;
+  let prefixProfile = undefined;
+  const rest = name.replace(/^(?:belifoa|linear)_/, "");
+  if (KNOWN_BASE_ACTIONS.has(rest)) {
+    cleanName = rest;
+  } else {
+    const idx = rest.indexOf("_");
+    if (idx !== -1) {
+      const possibleProf = rest.substring(0, idx);
+      const possibleAction = rest.substring(idx + 1);
+      if (KNOWN_BASE_ACTIONS.has(possibleAction)) {
+        prefixProfile = possibleProf;
+        cleanName = possibleAction;
+      } else {
+        cleanName = rest;
+      }
+    } else {
+      cleanName = rest;
+    }
+  }
+  if (prefixProfile && !args.profileName) {
+    args.profileName = prefixProfile;
+  }
+  const active = getActiveProfile(args.profileName);
+  const targetClient = args.profileName && args.profileName !== client.getProfileName() && client.getProfileName() !== undefined ? new BelifoaClient(undefined, args.profileName) : client;
+  if (cleanName === "create_issue") {
+    args.action = "create";
+    cleanName = "manage_issue";
+  } else if (cleanName === "update_issue") {
+    args.action = "update";
+    cleanName = "manage_issue";
+  } else if (cleanName === "close_issue" || cleanName === "resolve_issue") {
+    args.action = "close";
+    cleanName = "manage_issue";
+  } else if (cleanName === "list_issues" || cleanName === "my_issues") {
+    cleanName = args.query ? "search_issues" : "get_my_issues";
+  } else if (cleanName === "issue") {
+    cleanName = "get_issue";
+  }
   try {
-    switch (name) {
-      case "linear_auth_status": {
+    switch (cleanName) {
+      case "auth_status": {
         try {
-          const active = getActiveProfile(args.profileName);
           const me = await targetClient.getMe();
           const org = await targetClient.getOrganization();
           return {
@@ -14368,11 +14582,11 @@ async function handleToolCall(name, args, client) {
           return { content: [{ type: "text", text: getAuthGuidanceMessage() }] };
         }
       }
-      case "linear_auth_list": {
+      case "auth_list": {
         const profiles = listProfiles();
-        return { content: [{ type: "text", text: formatProfiles(profiles, format) }] };
+        return { content: [{ type: "text", text: formatProfiles(profiles, format, active) }] };
       }
-      case "linear_auth_switch": {
+      case "auth_switch": {
         let msgParts = [];
         if (args.profileName) {
           const profile = switchProfile(args.profileName);
@@ -14397,7 +14611,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
           ]
         };
       }
-      case "linear_set_api_key": {
+      case "set_api_key": {
         if (!args.apiKey || typeof args.apiKey !== "string") {
           throw new Error("apiKey parameter is required.");
         }
@@ -14423,25 +14637,23 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
           ]
         };
       }
-      case "linear_get_issue": {
+      case "get_issue": {
         const issue2 = await targetClient.getIssue(args.id);
-        return { content: [{ type: "text", text: formatIssueDetail(issue2, format) }] };
+        return { content: [{ type: "text", text: formatIssueDetail(issue2, format, active) }] };
       }
-      case "linear_search_issues": {
-        const active = getActiveProfile(args.profileName);
+      case "search_issues": {
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await targetClient.searchIssues(args.query, {
+        const issues = await targetClient.searchIssues(args.query || "", {
           teamKey,
           limit: args.limit
         });
-        return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
+        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
       }
-      case "linear_get_my_issues": {
+      case "get_my_issues": {
         const issues = await targetClient.getMyIssues(args.limit || 20);
-        return { content: [{ type: "text", text: formatIssueList(issues, format) }] };
+        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
       }
-      case "linear_manage_issue": {
-        const active = getActiveProfile(args.profileName);
+      case "manage_issue": {
         if (args.action === "bulk_create") {
           const defaultTeam = args.teamKey || active?.defaultTeam;
           const items = (args.issues || []).map((i) => ({
@@ -14464,7 +14676,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
           if (result.created.length > 0) {
             parts.push(`\u2705 Created ${result.created.length} issue(s):
 
-${formatIssueList(result.created, format)}`);
+${formatIssueList(result.created, format, active)}`);
           }
           if (result.errors.length > 0) {
             parts.push(`\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):
@@ -14497,7 +14709,7 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
-${formatIssueDetail(created, format)}` }] };
+${formatIssueDetail(created, format, active)}` }] };
         }
         if (args.action === "update") {
           if (!args.issueId)
@@ -14521,11 +14733,11 @@ ${formatIssueDetail(created, format)}` }] };
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
             return { content: [{ type: "text", text: `\u2705 Updated issue:
 
-${formatIssueDetail(refreshed, format)}` }] };
+${formatIssueDetail(refreshed, format, active)}` }] };
           }
           return { content: [{ type: "text", text: `\u2705 Updated issue:
 
-${formatIssueDetail(updated, format)}` }] };
+${formatIssueDetail(updated, format, active)}` }] };
         }
         if (args.action === "close" || args.action === "resolve") {
           if (!args.issueId)
@@ -14537,7 +14749,7 @@ ${formatIssueDetail(updated, format)}` }] };
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
           return { content: [{ type: "text", text: `\u2705 Closed/Resolved issue ${args.issueId}:
 
-${formatIssueDetail(refreshed, format)}` }] };
+${formatIssueDetail(refreshed, format, active)}` }] };
         }
         if (args.action === "comment") {
           if (!args.issueId || !args.commentBody) {
@@ -14556,8 +14768,7 @@ ${formatIssueDetail(refreshed, format)}` }] };
         }
         throw new Error(`Unsupported action: ${args.action}`);
       }
-      case "linear_bulk_create_issues": {
-        const active = getActiveProfile(args.profileName);
+      case "bulk_create_issues": {
         const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
         const items = (args.issues || []).map((i) => ({
           teamIdOrKey: i.team || defaultTeam,
@@ -14579,7 +14790,7 @@ ${formatIssueDetail(refreshed, format)}` }] };
         if (result.created.length > 0) {
           parts.push(`\u2705 Created ${result.created.length} issue(s):
 
-${formatIssueList(result.created, format)}`);
+${formatIssueList(result.created, format, active)}`);
         }
         if (result.errors.length > 0) {
           parts.push(`\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):
@@ -14590,16 +14801,16 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
 
 `) }] };
       }
-      case "linear_get_teams_and_projects": {
+      case "get_teams_and_projects": {
         const teams = await targetClient.getTeams();
         const projects = await targetClient.getProjects();
-        const text = [formatTeams(teams, format), "", formatProjects(projects, format)].join(`
+        const text = [formatTeams(teams, format, active), "", formatProjects(projects, format, active)].join(`
 `);
         return { content: [{ type: "text", text }] };
       }
-      case "linear_get_labels": {
+      case "get_labels": {
         const labels = await targetClient.getIssueLabels();
-        return { content: [{ type: "text", text: formatLabels(labels, format) }] };
+        return { content: [{ type: "text", text: formatLabels(labels, format, active) }] };
       }
       default:
         throw new Error(`Unknown tool name: ${name}`);
@@ -14614,7 +14825,7 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
     throw err;
   }
 }
-var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema, getLabelsToolSchema;
+var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema, getLabelsToolSchema, KNOWN_BASE_ACTIONS;
 var init_tools = __esm(() => {
   init_client();
   init_config();
@@ -14857,6 +15068,26 @@ var init_tools = __esm(() => {
       }
     }
   };
+  KNOWN_BASE_ACTIONS = new Set([
+    "auth_status",
+    "auth_list",
+    "auth_switch",
+    "set_api_key",
+    "get_issue",
+    "search_issues",
+    "get_my_issues",
+    "manage_issue",
+    "create_issue",
+    "update_issue",
+    "close_issue",
+    "resolve_issue",
+    "list_issues",
+    "my_issues",
+    "issue",
+    "bulk_create_issues",
+    "get_teams_and_projects",
+    "get_labels"
+  ]);
 });
 
 // src/mcp/server.ts
@@ -14867,7 +15098,7 @@ __export(exports_server, {
 async function startMcpServer() {
   const server = new Server({
     name: "belifoa",
-    version: "0.4.0"
+    version: "0.5.0"
   }, {
     capabilities: {
       tools: {}
@@ -14876,19 +15107,7 @@ async function startMcpServer() {
   const client = new BelifoaClient;
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-      tools: [
-        authStatusToolSchema,
-        authListToolSchema,
-        authSwitchToolSchema,
-        setApiKeyToolSchema,
-        getIssueToolSchema,
-        searchIssuesToolSchema,
-        getMyIssuesToolSchema,
-        manageIssueToolSchema,
-        bulkCreateIssuesToolSchema,
-        getTeamsAndProjectsToolSchema,
-        getLabelsToolSchema
-      ]
+      tools: getMcpToolSchemas()
     };
   });
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -16980,9 +17199,14 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.4.0");
-program2.command("init <profile>").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-t, --team <team>", "Default team key for this project").option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')").action((profileName, options) => {
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.0");
+program2.command("init [profile]").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Default team key for this project").option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')").action((profileArg, options) => {
   try {
+    const profileName = profileArg || options.profile || options.workspace;
+    if (!profileName) {
+      console.error("\u274C Error: Profile name is required (pass profile as argument or --profile <name>)");
+      process.exit(1);
+    }
     saveProjectConfig(process.cwd(), {
       profile: profileName,
       team: options.team?.toUpperCase(),
@@ -17051,20 +17275,21 @@ authCmd.command("remove <profile>").description("Remove a saved authentication p
     process.exit(1);
   }
 });
-authCmd.command("status").description("Check current active profile and workspace auth status").option("-p, --profile <profile>", "Target workspace profile").action(async (options) => {
-  const active = getActiveProfile(options.profile);
+authCmd.command("status").description("Check current active profile and workspace auth status").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").action(async (options) => {
+  const profileName = options.profile || options.workspace;
+  const active = getActiveProfile(profileName);
   if (!active) {
     console.log("\u274C No active API profile configured. Run `belifoa auth add <profile> <key>` or set LINEAR_API_KEY.");
     process.exit(1);
   }
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const client = new BelifoaClient(undefined, profileName);
     const me = await client.getMe();
     const org = await client.getOrganization();
     console.log(`\u2705 Active Profile: '${active.name}'`);
     console.log(`   Workspace: ${org.name} (${org.urlKey})`);
     console.log(`   User: ${me.name} (${me.email || me.id})`);
-    console.log(`   Default Team: ${active.defaultTeam || "None"}`);
+    console.log(`   Default Team: ${options.team || active.defaultTeam || "None"}`);
   } catch (err) {
     console.error(`\u274C Authentication status error: ${err.message}`);
     process.exit(1);
@@ -17085,63 +17310,100 @@ workspaceCmd.command("switch <profile>").description("Switch to workspace profil
   }
 });
 var teamCmd = program2.command("team").description("Manage and switch between default teams in active workspace");
-teamCmd.command("list").description("List teams in current active workspace").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+teamCmd.command("list").description("List teams in current active workspace").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key filter").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const teams = await client.getTeams();
-    console.log(formatTeams(teams, options.format));
+    console.log(formatTeams(teams, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-teamCmd.command("switch <teamKey>").description("Switch default team key for active profile (e.g. ENG)").option("-p, --profile <profile>", "Target workspace profile").action((teamKey, options) => {
+teamCmd.command("switch <teamKey>").description("Switch default team key for active profile (e.g. ENG)").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").action((teamKey, options) => {
   try {
-    const updated = switchDefaultTeam(teamKey, options.profile);
+    const profileName = options.profile || options.workspace;
+    const updated = switchDefaultTeam(teamKey, profileName);
     console.log(`\u2705 Default team for profile '${updated.name}' set to: '${updated.defaultTeam}'`);
   } catch (err) {
     console.error(`\u274C Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("my-issues").description("List issues assigned to you").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").action(async (options) => {
+program2.command("list").description("List or search issues in active profile or specified team").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-q, --query <query>", "Search query or keyword").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
-    const issues = await client.getMyIssues(parseInt(options.limit));
-    console.log(formatIssueList(issues, options.format));
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
+    const teamKey = options.team || active?.defaultTeam;
+    const query = options.query || "";
+    const issues = await client.searchIssues(query, {
+      teamKey,
+      limit: parseInt(options.limit)
+    });
+    console.log(formatIssueList(issues, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("search <query>").description("Search Linear issues").option("-p, --profile <profile>", "Target workspace profile").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (query, options) => {
+program2.command("my-issues").description("List issues assigned to you").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").action(async (options) => {
   try {
-    const active = getActiveProfile(options.profile);
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
+    const issues = await client.getMyIssues(parseInt(options.limit));
+    const filtered = options.team ? issues.filter((i) => i.teamKey?.toLowerCase() === options.team.toLowerCase()) : issues;
+    console.log(formatIssueList(filtered, options.format, active));
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+});
+program2.command("search <query>").description("Search Linear issues").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (query, options) => {
+  try {
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const teamKey = options.team || active?.defaultTeam;
     const issues = await client.searchIssues(query, {
       teamKey,
       limit: parseInt(options.limit)
     });
-    console.log(formatIssueList(issues, options.format));
+    console.log(formatIssueList(issues, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("issue <id>").description("Get details for a specific issue (e.g., ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
+program2.command("issue [id]").description("Get details for a specific issue (e.g. ENG-123) or list issues ('belifoa issue list')").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-q, --query <query>", "Search query or keyword").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (id, options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
-    const issue2 = await client.getIssue(id);
-    console.log(formatIssueDetail(issue2, options.format));
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
+    if (!id || id.toLowerCase() === "list") {
+      const teamKey = options.team || active?.defaultTeam;
+      const query = options.query || "";
+      const issues = await client.searchIssues(query, {
+        teamKey,
+        limit: parseInt(options.limit)
+      });
+      console.log(formatIssueList(issues, options.format, active));
+    } else {
+      const issue2 = await client.getIssue(id);
+      console.log(formatIssueDetail(issue2, options.format, active));
+    }
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("branch <id>").description("Get git branch name slug for a Linear issue (e.g. ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-c, --checkout", "Execute git checkout -b with the generated branch name").action(async (id, options) => {
+program2.command("branch <id>").description("Get git branch name slug for a Linear issue (e.g. ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-c, --checkout", "Execute git checkout -b with the generated branch name").action(async (id, options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const client = new BelifoaClient(undefined, profileName);
     const issue2 = await client.getIssue(id);
     const branchName = issue2.gitBranchName || generateGitBranchName(issue2);
     if (options.checkout) {
@@ -17156,15 +17418,16 @@ program2.command("branch <id>").description("Get git branch name slug for a Line
     process.exit(1);
   }
 });
-program2.command("create").description("Create a new Linear issue").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("-p, --priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Automatically assign created issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("create").description("Create a new Linear issue").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Automatically assign created issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const active = getActiveProfile(options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
     const team = options.team || active?.defaultTeam;
     if (!team) {
       console.error("\u274C Error: Team key is required (--team <key> or set default team via `belifoa team switch <key>`)");
       process.exit(1);
     }
-    const client = new BelifoaClient(undefined, options.profile);
+    const client = new BelifoaClient(undefined, profileName);
     const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined) || active?.defaultAssignee;
     const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
     const issue2 = await client.createIssue({
@@ -17182,15 +17445,17 @@ program2.command("create").description("Create a new Linear issue").option("--pr
       blockedBy: options.blockedBy,
       blocks: options.blocks
     });
-    console.log(formatIssueDetail(issue2, options.format));
+    console.log(formatIssueDetail(issue2, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("update <id>").alias("edit").description("Update an existing Linear issue (e.g., ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("--title <title>", "Updated issue title").option("-d, --description <description>", "Updated issue description").option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Assign issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Workflow state ID or name (e.g. 'In Progress', 'Done')").option("--parent <id>", "Parent issue ID or identifier").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("-c, --comment <comment>", "Add a comment along with the update").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
+program2.command("update <id>").alias("edit").description("Update an existing Linear issue (e.g., ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").option("--title <title>", "Updated issue title").option("-d, --description <description>", "Updated issue description").option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Assign issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Workflow state ID or name (e.g. 'In Progress', 'Done')").option("--parent <id>", "Parent issue ID or identifier").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("-c, --comment <comment>", "Add a comment along with the update").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const assigneeStr = options.assignee || (options.assignMe ? "me" : undefined);
     const estimateVal = options.estimate !== undefined ? options.estimate : options.points;
     const updated = await client.updateIssue(id, {
@@ -17210,42 +17475,47 @@ program2.command("update <id>").alias("edit").description("Update an existing Li
     if (options.comment) {
       await client.addComment(id, options.comment);
       const refreshed = await client.getIssue(id).catch(() => updated);
-      console.log(formatIssueDetail(refreshed, options.format));
+      console.log(formatIssueDetail(refreshed, options.format, active));
     } else {
-      console.log(formatIssueDetail(updated, options.format));
+      console.log(formatIssueDetail(updated, options.format, active));
     }
   } catch (err) {
     console.error(`Error updating issue ${id}: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("close <id>").alias("resolve").alias("done").description("Close or resolve an issue by transitioning state to Done / Completed").option("-p, --profile <profile>", "Target workspace profile").option("-c, --comment <comment>", "Add an optional closing comment").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
+program2.command("close <id>").alias("resolve").alias("done").description("Close or resolve an issue by transitioning state to Done / Completed").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").option("-c, --comment <comment>", "Add an optional closing comment").option("-f, --format <format>", "Output format", "cli_table").action(async (id, options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const updated = await client.updateIssue(id, { state: "Done" });
     if (options.comment) {
       await client.addComment(id, options.comment);
     }
     const refreshed = options.comment ? await client.getIssue(id).catch(() => updated) : updated;
-    console.log(formatIssueDetail(refreshed, options.format));
+    console.log(formatIssueDetail(refreshed, options.format, active));
   } catch (err) {
     console.error(`Error closing issue ${id}: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("labels").description("List all workspace issue labels").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("labels").description("List all workspace issue labels").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const labels = await client.getIssueLabels();
-    console.log(formatLabels(labels, options.format));
+    console.log(formatLabels(labels, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("import").alias("create-bulk").description("Bulk create Linear issues from a JSON file").requiredOption("--file <path>", "Path to JSON file containing array of issues").option("--profile <profile>", "Target workspace profile").option("-t, --team <team>", "Default team key/ID if omitted in task items").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("import").alias("create-bulk").description("Bulk create Linear issues from a JSON file").requiredOption("--file <path>", "Path to JSON file containing array of issues").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Default team key/ID if omitted in task items").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const active = getActiveProfile(options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
     const defaultTeam = options.team || active?.defaultTeam;
     const fileContent = readFileSync2(options.file, "utf-8");
     let data = JSON.parse(fileContent);
@@ -17261,12 +17531,12 @@ program2.command("import").alias("create-bulk").description("Bulk create Linear 
       process.exit(1);
     }
     console.log(`\uD83D\uDCE6 Importing ${issuesArray.length} issue(s)...`);
-    const client = new BelifoaClient(undefined, options.profile);
+    const client = new BelifoaClient(undefined, profileName);
     const result = await client.createBulkIssues(issuesArray, defaultTeam);
     if (result.created.length > 0) {
       console.log(`
 \u2705 Successfully created ${result.created.length} issue(s):`);
-      console.log(formatIssueList(result.created, options.format));
+      console.log(formatIssueList(result.created, options.format, active));
     }
     if (result.errors.length > 0) {
       console.error(`
@@ -17280,21 +17550,25 @@ program2.command("import").alias("create-bulk").description("Bulk create Linear 
     process.exit(1);
   }
 });
-program2.command("teams").description("List all Linear teams").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("teams").description("List all Linear teams").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const teams = await client.getTeams();
-    console.log(formatTeams(teams, options.format));
+    console.log(formatTeams(teams, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("projects").description("List all Linear projects").option("-p, --profile <profile>", "Target workspace profile").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("projects").description("List all Linear projects").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Target team key").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
-    const client = new BelifoaClient(undefined, options.profile);
+    const profileName = options.profile || options.workspace;
+    const active = getActiveProfile(profileName);
+    const client = new BelifoaClient(undefined, profileName);
     const projects = await client.getProjects();
-    console.log(formatProjects(projects, options.format));
+    console.log(formatProjects(projects, options.format, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);

@@ -45,7 +45,10 @@ Standard Linear integrations for LLM agents suffer from three major inefficienci
 
 - **⚡ Token-Efficient Context Formatting**: CLI defaults to ANSI-styled `cli_table`, while MCP tools default to lightweight `markdown` and `compact_json` to maximize token budget.
 - **🔐 Multi-Profile & Workspace Isolation**: Manage multiple Linear accounts and team profiles seamlessly without cross-project state leakage.
-- **📂 Smart Repository & Directory Auto-Detection**: Auto-detects workspace profile and team key from Git remote origin URL and directory name when `--team` is omitted.
+- **🏷️ MCP Tool Namespacing for Monorepos**: Prefixes tool names with the active workspace profile (e.g., `belifoa_myrehat_create_issue`, `belifoa_myrehat_list_issues`) to eliminate collisions when multiple MCP servers or root definitions are active.
+- **📂 Automatic Ancestor & Submodule Resolution**: Automatically traverses parent/child directories to auto-detect project configuration from `.belifoarc.json`, `.belifoa`, or `.mcp.json` in submodules.
+- **💬 Explicit Active Profile Banner**: Displays a 1-line context header (`[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)`) on CLI and MCP outputs for instant target workspace verification.
+- **🎛️ Standardized CLI Flags**: Uniform `-p/--profile`, `-w/--workspace`, and `-t/--team` flag support across all subcommands (`list`, `issue list`, `my-issues`, `search`, `create`, `update`, `close`).
 - **🔗 First-Class Hierarchy & Relations**: Easily link `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tool calls.
 - **🌿 Git Branch Helper Output**: Get ready-to-use Linear git branch slugs (`belifoa branch ENG-123`) and checkout branches directly (`--checkout`).
 - **📦 MCP Bulk Issue Creation**: Batch create multiple backlog items in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create" })`.

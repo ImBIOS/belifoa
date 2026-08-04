@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { execSync } from "node:child_process";
@@ -53,47 +53,116 @@ export function saveConfig(config: BelifoaConfig): void {
   writeFileSync(configFile, JSON.stringify(config, null, 2), "utf-8");
 }
 
+function checkDirectoryForConfig(dir: string): { profile?: string; team?: string; apiKey?: string; defaultAssignee?: string } | null {
+  const jsonFile = join(dir, ".belifoarc.json");
+  if (existsSync(jsonFile)) {
+    try {
+      const content = readFileSync(jsonFile, "utf-8");
+      return JSON.parse(content);
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  const dotFile = join(dir, ".belifoa");
+  if (existsSync(dotFile)) {
+    try {
+      const content = readFileSync(dotFile, "utf-8");
+      return JSON.parse(content);
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  const dotJsonFile = join(dir, ".belifoa.json");
+  if (existsSync(dotJsonFile)) {
+    try {
+      const content = readFileSync(dotJsonFile, "utf-8");
+      return JSON.parse(content);
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  const mcpFile = join(dir, ".mcp.json");
+  if (existsSync(mcpFile)) {
+    try {
+      const content = readFileSync(mcpFile, "utf-8");
+      const data = JSON.parse(content);
+      let profile: string | undefined = undefined;
+      let team: string | undefined = undefined;
+
+      if (data.mcpServers) {
+        for (const [key, server] of Object.entries<any>(data.mcpServers)) {
+          if (key.toLowerCase().includes("belifoa") || key.toLowerCase().includes("linear")) {
+            if (server.env?.BELIFOA_PROFILE) profile = server.env.BELIFOA_PROFILE;
+            if (server.env?.BELIFOA_DEFAULT_TEAM) team = server.env.BELIFOA_DEFAULT_TEAM;
+          }
+        }
+      }
+      if (!profile && data.env?.BELIFOA_PROFILE) profile = data.env.BELIFOA_PROFILE;
+      if (!profile && data.profile) profile = data.profile;
+      if (!profile && data.belifoaProfile) profile = data.belifoaProfile;
+      if (!team && data.env?.BELIFOA_DEFAULT_TEAM) team = data.env.BELIFOA_DEFAULT_TEAM;
+      if (!team && data.defaultTeam) team = data.defaultTeam;
+
+      if (profile || team) {
+        return { profile, team };
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  return null;
+}
+
+function scanChildDirectoriesForConfig(
+  dir: string,
+  depth = 0,
+  maxDepth = 2
+): { profile?: string; team?: string; apiKey?: string; defaultAssignee?: string } | null {
+  if (depth > maxDepth) return null;
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const name = entry.name;
+      if (name.startsWith(".") || name === "node_modules" || name === "dist" || name === "build") continue;
+
+      const childDir = join(dir, name);
+      const conf = checkDirectoryForConfig(childDir);
+      if (conf) return conf;
+
+      if (depth < maxDepth) {
+        const subConf = scanChildDirectoriesForConfig(childDir, depth + 1, maxDepth);
+        if (subConf) return subConf;
+      }
+    }
+  } catch {
+    // ignore filesystem error
+  }
+  return null;
+}
+
 /**
- * Search upwards for project-local .belifoarc.json, .belifoa, or .belifoa.json configuration
+ * Search upwards and downwards in directory tree for project-local .belifoarc.json, .belifoa, .belifoa.json, or .mcp.json
  */
 export function getProjectConfig(startDir: string = process.cwd()): { profile?: string; team?: string; apiKey?: string; defaultAssignee?: string } | null {
   let currentDir = startDir;
+
+  // 1. Traverse parent directories up to root
   while (true) {
-    const jsonFile = join(currentDir, ".belifoarc.json");
-    if (existsSync(jsonFile)) {
-      try {
-        const content = readFileSync(jsonFile, "utf-8");
-        return JSON.parse(content);
-      } catch {
-        // ignore parse error
-      }
-    }
-
-    const dotFile = join(currentDir, ".belifoa");
-    if (existsSync(dotFile)) {
-      try {
-        const content = readFileSync(dotFile, "utf-8");
-        return JSON.parse(content);
-      } catch {
-        // ignore parse error
-      }
-    }
-
-    const dotJsonFile = join(currentDir, ".belifoa.json");
-    if (existsSync(dotJsonFile)) {
-      try {
-        const content = readFileSync(dotJsonFile, "utf-8");
-        return JSON.parse(content);
-      } catch {
-        // ignore parse error
-      }
-    }
+    const conf = checkDirectoryForConfig(currentDir);
+    if (conf) return conf;
 
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir) break; // reached filesystem root
     currentDir = parentDir;
   }
-  return null;
+
+  // 2. Scan child subdirectories if ancestor search found nothing
+  return scanChildDirectoriesForConfig(startDir);
 }
 
 /**

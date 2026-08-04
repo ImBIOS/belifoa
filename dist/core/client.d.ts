@@ -4,6 +4,7 @@ export declare class BelifoaClient {
     private profileName?;
     constructor(apiKey?: string, profileName?: string);
     setApiKey(key: string): void;
+    getProfileName(): string | undefined;
     getApiKey(): string;
     private graphql;
     /**

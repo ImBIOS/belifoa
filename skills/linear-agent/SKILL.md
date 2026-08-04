@@ -10,7 +10,10 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 ## Core Capabilities
 - **Persistent Auth**: Uses `LINEAR_API_KEY` (Personal API Key) or `~/.config/belifoa/config.json`.
 - **70%+ Token Footprint Savings**: Formatted Markdown tables/cards instead of massive, raw GraphQL API JSON objects.
-- **Smart Zero-Config Repo / Team Auto-Detection**: Automatically detects matching workspace profile and team key from Git remote URL or directory name when `--team` is omitted.
+- **Smart Zero-Config Repo, Team & Submodule Resolution**: Auto-detects matching workspace profile and team key from Git remote URL, `.belifoarc.json`, or `.mcp.json` traversing parent and submodule directory trees.
+- **MCP Tool Namespacing for Monorepos**: Prefixes MCP tools with workspace profile name (e.g. `belifoa_myrehat_create_issue` or `belifoa_myrehat_list_issues`) to prevent tool collisions when multiple MCP servers run concurrently.
+- **Explicit Active Profile Banner**: Prints a 1-line context header (`[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)`) on CLI & MCP outputs for immediate visual confirmation.
+- **Standardized CLI Flags**: Consistent `-p/--profile`, `-w/--workspace`, and `-t/--team` across all CLI subcommands (`list`, `issue list`, `my-issues`, `search`, `create`, `update`, `close`).
 - **Git Branch Helper**: Generate and checkout standard Linear branch names (`belifoa branch ENG-123 --checkout`).
 - **Hierarchy & Relations**: Support for `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tools.
 - **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create", issues: [...] })`.

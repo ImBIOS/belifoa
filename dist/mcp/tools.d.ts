@@ -424,6 +424,11 @@ export declare const getLabelsToolSchema: {
         };
     };
 };
+export declare function getMcpToolSchemas(overrideProfileName?: string): Array<{
+    name: string;
+    description: string;
+    inputSchema: any;
+}>;
 export declare function getAuthGuidanceMessage(): string;
 export declare function handleToolCall(name: string, args: any, client: BelifoaClient): Promise<{
     content: Array<{

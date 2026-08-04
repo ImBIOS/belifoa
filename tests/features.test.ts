@@ -5,10 +5,12 @@ beforeAll(() => {
 });
 
 import { BelifoaClient } from "../src/core/client.js";
-import { formatLabels, generateGitBranchName, cleanRawIssue, formatIssueDetail } from "../src/core/formatters.js";
-import { addProfile, getActiveProfile, switchProfile, detectTeamFromCwd } from "../src/core/config.js";
+import { formatLabels, generateGitBranchName, cleanRawIssue, formatIssueDetail, formatActiveProfileBanner, formatIssueList } from "../src/core/formatters.js";
+import { addProfile, getActiveProfile, switchProfile, detectTeamFromCwd, getProjectConfig } from "../src/core/config.js";
 import { BelifoaSuggestionError } from "../src/core/types.js";
-import { handleToolCall } from "../src/mcp/tools.js";
+import { handleToolCall, getMcpToolSchemas } from "../src/mcp/tools.js";
+import { writeFileSync, rmSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 describe("Belifoa New Features Unit Tests", () => {
   it("formatLabels formats label list into cli_table, markdown, and compact_json", () => {
@@ -162,5 +164,98 @@ describe("Belifoa New Features Unit Tests", () => {
     expect(active?.defaultAssignee).toBe("me");
 
     delete process.env.BELIFOA_DEFAULT_ASSIGNEE;
+  });
+
+  it("1. Tool Namespacing in Monorepos: getMcpToolSchemas prefixes tools with workspace profile and handleToolCall resolves prefixed tool calls", async () => {
+    addProfile(
+      "myrehat",
+      "lin_api_myrehat_123",
+      { id: "org-myr", name: "MyRehat Ltd", urlKey: "myrehat" },
+      "MYR"
+    );
+    switchProfile("myrehat");
+
+    const schemas = getMcpToolSchemas("myrehat");
+    expect(schemas.some((s) => s.name === "belifoa_myrehat_create_issue")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_myrehat_list_issues")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_myrehat_get_issue")).toBe(true);
+
+    const client = new BelifoaClient("fake-key", "myrehat");
+    client.getMyIssues = async () => [
+      {
+        id: "id-1",
+        identifier: "MYR-10",
+        title: "Monorepo tool namespacing bug",
+        status: "In Progress",
+        priority: 1,
+        priorityLabel: "Urgent 🔴",
+      },
+    ];
+
+    const result = await handleToolCall("belifoa_myrehat_list_issues", {}, client);
+    expect(result.content[0].text).toContain("MYR-10");
+    expect(result.content[0].text).toContain("[belifoa] Active Profile");
+  });
+
+  it("2. Automatic Directory Ancestor Resolution: parses .mcp.json and scans submodules", () => {
+    const testDir = "/tmp/test-mcp-ancestor/submodule-app";
+    mkdirSync(testDir, { recursive: true });
+    const mcpPath = join("/tmp/test-mcp-ancestor", ".mcp.json");
+    writeFileSync(
+      mcpPath,
+      JSON.stringify({
+        mcpServers: {
+          belifoa: {
+            command: "bun",
+            args: ["x", "belifoa", "mcp"],
+            env: { BELIFOA_PROFILE: "myrehat", BELIFOA_DEFAULT_TEAM: "MYR" },
+          },
+        },
+      })
+    );
+
+    // Parent directory traversal resolves .mcp.json from submodule-app
+    const conf = getProjectConfig(testDir);
+    expect(conf?.profile).toBe("myrehat");
+    expect(conf?.team).toBe("MYR");
+
+    // Child directory scanning resolves config in submodules
+    const rootConf = getProjectConfig("/tmp/test-mcp-ancestor");
+    expect(rootConf?.profile).toBe("myrehat");
+
+    rmSync("/tmp/test-mcp-ancestor", { recursive: true, force: true });
+  });
+
+  it("4. Explicit Active Profile Banner: prints 1-line context header in markdown and cli_table", () => {
+    const profile = {
+      name: "myrehat",
+      apiKey: "lin_api_test",
+      organization: { id: "org-1", name: "MyRehat Workspace", urlKey: "myrehat" },
+      defaultTeam: "MYR",
+    };
+
+    const bannerMd = formatActiveProfileBanner(profile, "markdown");
+    expect(bannerMd).toContain("> **[belifoa] Active Profile**: `myrehat` (Workspace: **MyRehat Workspace**, Default Team: **MYR**)");
+
+    const bannerAnsi = formatActiveProfileBanner(profile, "cli_table");
+    expect(bannerAnsi).toContain("[belifoa]");
+    expect(bannerAnsi).toContain("Active Profile:");
+    expect(bannerAnsi).toContain("myrehat");
+    expect(bannerAnsi).toContain("MyRehat Workspace");
+
+    const issues = [
+      {
+        id: "id-1",
+        identifier: "MYR-1",
+        title: "Test Banner Issue",
+        status: "Todo",
+        priority: 2,
+        priorityLabel: "High 🟠",
+      },
+    ];
+
+    const outputMd = formatIssueList(issues, "markdown", profile);
+    expect(outputMd).toContain("[belifoa] Active Profile");
+    expect(outputMd).toContain("MYR-1");
   });
 });
