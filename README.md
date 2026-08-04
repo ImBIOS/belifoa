@@ -45,9 +45,12 @@ Standard Linear integrations for LLM agents suffer from three major inefficienci
 
 - **⚡ Token-Efficient Context Formatting**: CLI defaults to ANSI-styled `cli_table`, while MCP tools default to lightweight `markdown` and `compact_json` to maximize token budget.
 - **🔐 Multi-Profile & Workspace Isolation**: Manage multiple Linear accounts and team profiles seamlessly without cross-project state leakage.
+- **📂 Smart Repository & Directory Auto-Detection**: Auto-detects workspace profile and team key from Git remote origin URL and directory name when `--team` is omitted.
+- **🔗 First-Class Hierarchy & Relations**: Easily link `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tool calls.
+- **🌿 Git Branch Helper Output**: Get ready-to-use Linear git branch slugs (`belifoa branch ENG-123`) and checkout branches directly (`--checkout`).
+- **📦 MCP Bulk Issue Creation**: Batch create multiple backlog items in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create" })`.
+- **🔄 Self-Correcting Error Payloads for LLMs**: Returns structured JSON errors with valid suggestions (`availableTeams`, `availableStates`, `availableUsers`, `availableProfiles`) on invalid parameters so AI agents self-correct in 1 turn.
 - **🚀 Zero-Installation Direct Execution**: Run instantly using `bun x github:ImBIOS/belifoa#canary` or `pnpm add github:ImBIOS/belifoa`.
-- **📦 Bulk Import & Batch Operations**: Easily create or import issues in bulk from structured JSON files.
-- **📈 Built-In Benchmarking Suite**: Measure exact byte size and estimated token footprint savings against official Linear MCP tools.
 
 ---
 

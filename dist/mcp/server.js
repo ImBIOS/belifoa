@@ -13178,6 +13178,35 @@ function detectProfileFromGitRemote(config2, cwd = process.cwd()) {
   }
   return null;
 }
+function detectTeamFromCwd(profile, cwd = process.cwd()) {
+  if (!profile.teams || profile.teams.length === 0)
+    return null;
+  const folderName = cwd.split("/").filter(Boolean).pop()?.toLowerCase() || "";
+  const remoteUrl = getGitRemoteUrl(cwd);
+  let repoName = "";
+  if (remoteUrl) {
+    const match = remoteUrl.match(/[\/:]([^\/:]+)\.git$/) || remoteUrl.match(/[\/:]([^\/:]+)$/);
+    if (match)
+      repoName = match[1].toLowerCase();
+  }
+  const candidates = [folderName, repoName].filter(Boolean);
+  for (const candidate of candidates) {
+    const exactKey = profile.teams.find((t) => t.key.toLowerCase() === candidate);
+    if (exactKey)
+      return exactKey.key.toUpperCase();
+    const exactName = profile.teams.find((t) => t.name.toLowerCase() === candidate);
+    if (exactName)
+      return exactName.key.toUpperCase();
+    const subMatch = profile.teams.find((t) => {
+      const k = t.key.toLowerCase();
+      const n = t.name.toLowerCase();
+      return candidate.includes(k) || k.includes(candidate) || candidate.includes(n) || n.includes(candidate);
+    });
+    if (subMatch)
+      return subMatch.key.toUpperCase();
+  }
+  return null;
+}
 function saveProjectConfig(projectDir, configData) {
   const file = join(projectDir, ".belifoarc.json");
   writeFileSync(file, JSON.stringify(configData, null, 2), "utf-8");
@@ -13215,6 +13244,11 @@ function getActiveProfile(overrideProfileName) {
       active.apiKey = envKey;
     if (envTeam || projectConfig?.team) {
       active.defaultTeam = envTeam || projectConfig?.team;
+    } else if (!active.defaultTeam) {
+      const autoTeam = detectTeamFromCwd(active);
+      if (autoTeam) {
+        active.defaultTeam = autoTeam;
+      }
     }
     const assigneeVal = envAssignee || projectConfig?.defaultAssignee || active.defaultAssignee;
     if (assigneeVal) {
@@ -13287,18 +13321,49 @@ function getPriorityLabel(priority) {
 function pad(str, length) {
   return (str + " ".repeat(length)).substring(0, length);
 }
+function generateGitBranchName(issue2, userPrefix) {
+  const idSlug = issue2.identifier ? issue2.identifier.toLowerCase() : "";
+  const titleSlug = issue2.title ? issue2.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 50) : "";
+  const rawAssignee = userPrefix || issue2.assignee;
+  let userSlug = "";
+  if (rawAssignee) {
+    userSlug = rawAssignee.toLowerCase().replace(/^@/, "").split(" ")[0].replace(/[^a-z0-9]/g, "");
+  }
+  return userSlug ? `${userSlug}/${idSlug}-${titleSlug}` : `${idSlug}-${titleSlug}`;
+}
 function cleanRawIssue(node) {
   const priority = node.priority ?? 0;
+  const identifier = node.identifier;
+  const title = node.title;
+  const assignee = node.assignee?.name || node.assignee?.email;
+  const parent = node.parent ? { id: node.parent.id, identifier: node.parent.identifier, title: node.parent.title } : undefined;
+  const children = node.children?.nodes ? node.children.nodes.map((c) => ({
+    id: c.id,
+    identifier: c.identifier,
+    title: c.title,
+    status: c.state?.name || c.status,
+    priority: c.priority
+  })) : undefined;
+  const relations = node.relations?.nodes ? node.relations.nodes.map((r) => ({
+    id: r.id,
+    type: r.type,
+    relatedIssue: {
+      id: r.relatedIssue?.id,
+      identifier: r.relatedIssue?.identifier,
+      title: r.relatedIssue?.title
+    }
+  })) : undefined;
+  const gitBranchName = identifier && title ? generateGitBranchName({ identifier, title, assignee }) : undefined;
   return {
     id: node.id,
-    identifier: node.identifier,
-    title: node.title,
+    identifier,
+    title,
     description: node.description ?? undefined,
     priority,
     priorityLabel: getPriorityLabel(priority),
     status: node.state?.name || node.status || "Unknown",
     teamKey: node.team?.key,
-    assignee: node.assignee?.name || node.assignee?.email,
+    assignee,
     project: node.project?.name,
     labels: node.labels?.nodes ? node.labels.nodes.map((l) => l.name) : node.labels || [],
     estimate: node.estimate ?? undefined,
@@ -13311,7 +13376,11 @@ function cleanRawIssue(node) {
       body: c.body,
       createdAt: c.createdAt,
       user: c.user ? { id: c.user.id, name: c.user.name, email: c.user.email } : undefined
-    })) : undefined
+    })) : undefined,
+    parent,
+    children,
+    relations,
+    gitBranchName
   };
 }
 function formatIssueList(issues, format = "cli_table") {
@@ -13388,6 +13457,10 @@ function formatIssueDetail(issue2, format = "cli_table") {
       estimate: issue2.estimate,
       dueDate: issue2.dueDate,
       url: issue2.url,
+      gitBranchName: issue2.gitBranchName,
+      parent: issue2.parent ? issue2.parent.identifier || issue2.parent.id : undefined,
+      children: issue2.children && issue2.children.length > 0 ? issue2.children.map((c) => c.identifier || c.id) : undefined,
+      relations: issue2.relations && issue2.relations.length > 0 ? issue2.relations.map((r) => ({ type: r.type, issue: r.relatedIssue?.identifier || r.relatedIssue?.id })) : undefined,
       description: issue2.description
     };
     if (issue2.comments && issue2.comments.length > 0) {
@@ -13409,6 +13482,17 @@ function formatIssueDetail(issue2, format = "cli_table") {
       `- **Assignee**: ${issue2.assignee ? `@${issue2.assignee}` : "Unassigned"}`,
       `- **Team**: ${issue2.teamKey || "N/A"}`
     ];
+    if (issue2.gitBranchName)
+      lines2.push(`- **Git Branch**: \`${issue2.gitBranchName}\``);
+    if (issue2.parent)
+      lines2.push(`- **Parent**: [${issue2.parent.identifier}] ${issue2.parent.title}`);
+    if (issue2.children && issue2.children.length > 0) {
+      lines2.push(`- **Children**: ${issue2.children.map((c) => `[${c.identifier}] ${c.title}`).join(", ")}`);
+    }
+    if (issue2.relations && issue2.relations.length > 0) {
+      const relStr = issue2.relations.map((r) => `${r.type.toUpperCase()}: [${r.relatedIssue?.identifier}] ${r.relatedIssue?.title}`).join("; ");
+      lines2.push(`- **Relations**: ${relStr}`);
+    }
     if (issue2.project)
       lines2.push(`- **Project**: ${issue2.project}`);
     if (issue2.labels && issue2.labels.length > 0)
@@ -13441,6 +13525,17 @@ function formatIssueDetail(issue2, format = "cli_table") {
     `  \x1B[1mAssignee\x1B[0m:  ${issue2.assignee ? `@${issue2.assignee}` : "Unassigned"}`,
     `  \x1B[1mTeam\x1B[0m:      ${issue2.teamKey || "N/A"}`
   ];
+  if (issue2.gitBranchName)
+    lines.push(`  \x1B[1mGit Branch\x1B[0m: \x1B[33m${issue2.gitBranchName}\x1B[0m`);
+  if (issue2.parent)
+    lines.push(`  \x1B[1mParent\x1B[0m:     [${issue2.parent.identifier}] ${issue2.parent.title}`);
+  if (issue2.children && issue2.children.length > 0) {
+    lines.push(`  \x1B[1mChildren\x1B[0m:   ${issue2.children.map((c) => `[${c.identifier}]`).join(", ")}`);
+  }
+  if (issue2.relations && issue2.relations.length > 0) {
+    const relStr = issue2.relations.map((r) => `${r.type}: [${r.relatedIssue?.identifier}]`).join(", ");
+    lines.push(`  \x1B[1mRelations\x1B[0m:  ${relStr}`);
+  }
   if (issue2.project)
     lines.push(`  \x1B[1mProject\x1B[0m:   ${issue2.project}`);
   if (issue2.labels && issue2.labels.length > 0)
@@ -13626,6 +13721,19 @@ var init_formatters = __esm(() => {
   };
 });
 
+// src/core/types.ts
+var BelifoaSuggestionError;
+var init_types2 = __esm(() => {
+  BelifoaSuggestionError = class BelifoaSuggestionError extends Error {
+    suggestions;
+    constructor(message, suggestions) {
+      super(message);
+      this.name = "BelifoaSuggestionError";
+      this.suggestions = suggestions;
+    }
+  };
+});
+
 // src/core/client.ts
 class BelifoaClient {
   apiKey;
@@ -13740,6 +13848,27 @@ class BelifoaClient {
     const data = await this.graphql(query, { teamId });
     return data.team?.states?.nodes || [];
   }
+  async resolveIssueId(identifierOrId) {
+    if (!identifierOrId)
+      return "";
+    if (identifierOrId.includes("-") && identifierOrId.length > 25)
+      return identifierOrId;
+    const issue2 = await this.getIssue(identifierOrId);
+    return issue2.id;
+  }
+  async createIssueRelation(issueId, relatedIssueId, type = "blocks") {
+    const mutation = `
+      mutation CreateIssueRelation($input: IssueRelationCreateInput!) {
+        issueRelationCreate(input: $input) {
+          success
+        }
+      }
+    `;
+    const data = await this.graphql(mutation, {
+      input: { issueId, relatedIssueId, type }
+    });
+    return data.issueRelationCreate?.success ?? false;
+  }
   async resolveUserId(assigneeStr) {
     if (!assigneeStr)
       return;
@@ -13752,7 +13881,13 @@ class BelifoaClient {
     }
     const users = await this.getUsers();
     const match = users.find((u) => u.id === assigneeStr || u.email?.toLowerCase() === cleanStr || u.name.toLowerCase() === cleanStr || u.name.toLowerCase().includes(cleanStr));
-    return match?.id;
+    if (!match) {
+      throw new BelifoaSuggestionError(`Assignee '${assigneeStr}' not found in workspace.`, {
+        error: `Assignee '${assigneeStr}' not found in workspace`,
+        availableUsers: users.map((u) => ({ name: u.name, email: u.email, id: u.id }))
+      });
+    }
+    return match.id;
   }
   async resolveProjectId(projectStr) {
     if (!projectStr)
@@ -13762,7 +13897,13 @@ class BelifoaClient {
     const projects = await this.getProjects();
     const cleanStr = projectStr.toLowerCase();
     const match = projects.find((p) => p.id === projectStr || p.name.toLowerCase() === cleanStr || p.name.toLowerCase().includes(cleanStr));
-    return match?.id;
+    if (!match) {
+      throw new BelifoaSuggestionError(`Project '${projectStr}' not found in workspace.`, {
+        error: `Project '${projectStr}' not found in workspace`,
+        availableProjects: projects.map((p) => ({ name: p.name, id: p.id, state: p.state }))
+      });
+    }
+    return match.id;
   }
   async resolveStateId(teamId, stateStr) {
     if (!stateStr)
@@ -13775,7 +13916,13 @@ class BelifoaClient {
     if (!match && ["done", "completed", "closed", "resolved"].includes(cleanStr)) {
       match = states.find((s) => s.type.toLowerCase() === "completed");
     }
-    return match?.id;
+    if (!match) {
+      throw new BelifoaSuggestionError(`State '${stateStr}' not found for team.`, {
+        error: `State '${stateStr}' not found for team`,
+        availableStates: states.map((s) => ({ name: s.name, type: s.type, id: s.id }))
+      });
+    }
+    return match.id;
   }
   async resolveLabelIds(labelsInput) {
     if (!labelsInput)
@@ -13823,6 +13970,9 @@ class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -13856,6 +14006,9 @@ class BelifoaClient {
           assignee { name email }
           project { name }
           labels { nodes { name } }
+          parent { id identifier title }
+          children { nodes { id identifier title priority state { name } } }
+          relations { nodes { id type relatedIssue { id identifier title } } }
           comments(first: 20) {
             nodes {
               id
@@ -13894,6 +14047,9 @@ class BelifoaClient {
               assignee { name email }
               project { name }
               labels { nodes { name } }
+              parent { id identifier title }
+              children { nodes { id identifier title priority state { name } } }
+              relations { nodes { id type relatedIssue { id identifier title } } }
             }
           }
         }
@@ -13906,16 +14062,21 @@ class BelifoaClient {
   }
   async createIssue(params) {
     let teamId = params.teamIdOrKey;
-    if (!params.teamIdOrKey.includes("-") || params.teamIdOrKey.length < 10) {
-      const teams = await this.getTeams();
-      const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey);
-      if (match)
-        teamId = match.id;
+    const teams = await this.getTeams();
+    const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey);
+    if (match) {
+      teamId = match.id;
+    } else {
+      throw new BelifoaSuggestionError(`Team '${params.teamIdOrKey}' not found in workspace.`, {
+        error: `Team '${params.teamIdOrKey}' not found in workspace`,
+        availableTeams: teams.map((t) => ({ key: t.key, name: t.name, id: t.id }))
+      });
     }
     const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
     const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
     const stateId = params.state ? await this.resolveStateId(teamId, params.state) : undefined;
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
+    const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
     const mutation = `
       mutation CreateIssue($input: IssueCreateInput!) {
         issueCreate(input: $input) {
@@ -13935,6 +14096,9 @@ class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -13949,14 +14113,41 @@ class BelifoaClient {
       stateId,
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
-      labelIds
+      labelIds,
+      parentId
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, { input });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
     }
-    return cleanRawIssue(data.issueCreate.issue);
+    const createdIssue = cleanRawIssue(data.issueCreate.issue);
+    if (params.blockedBy) {
+      const blockedByArr = Array.isArray(params.blockedBy) ? params.blockedBy : params.blockedBy.split(",").map((s) => s.trim());
+      for (const item of blockedByArr) {
+        if (!item)
+          continue;
+        const blockingId = await this.resolveIssueId(item);
+        if (blockingId) {
+          await this.createIssueRelation(blockingId, createdIssue.id, "blocks").catch(() => {});
+        }
+      }
+    }
+    if (params.blocks) {
+      const blocksArr = Array.isArray(params.blocks) ? params.blocks : params.blocks.split(",").map((s) => s.trim());
+      for (const item of blocksArr) {
+        if (!item)
+          continue;
+        const blockedId = await this.resolveIssueId(item);
+        if (blockedId) {
+          await this.createIssueRelation(createdIssue.id, blockedId, "blocks").catch(() => {});
+        }
+      }
+    }
+    if (params.blockedBy || params.blocks) {
+      return await this.getIssue(createdIssue.id).catch(() => createdIssue);
+    }
+    return createdIssue;
   }
   async updateIssue(id, params) {
     const existing = await this.getIssue(id).catch(() => {
@@ -13967,6 +14158,7 @@ class BelifoaClient {
     const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
     const stateId = params.state && teamId ? await this.resolveStateId(teamId, params.state) : undefined;
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
+    const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
     const mutation = `
       mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
         issueUpdate(id: $id, input: $input) {
@@ -13986,6 +14178,9 @@ class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -13999,7 +14194,8 @@ class BelifoaClient {
       stateId,
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
-      labelIds
+      labelIds,
+      parentId
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, {
@@ -14009,7 +14205,33 @@ class BelifoaClient {
     if (!data.issueUpdate.success || !data.issueUpdate.issue) {
       throw new Error(`Failed to update issue ${id}`);
     }
-    return cleanRawIssue(data.issueUpdate.issue);
+    const updatedIssue = cleanRawIssue(data.issueUpdate.issue);
+    if (params.blockedBy) {
+      const blockedByArr = Array.isArray(params.blockedBy) ? params.blockedBy : params.blockedBy.split(",").map((s) => s.trim());
+      for (const item of blockedByArr) {
+        if (!item)
+          continue;
+        const blockingId = await this.resolveIssueId(item);
+        if (blockingId) {
+          await this.createIssueRelation(blockingId, updatedIssue.id, "blocks").catch(() => {});
+        }
+      }
+    }
+    if (params.blocks) {
+      const blocksArr = Array.isArray(params.blocks) ? params.blocks : params.blocks.split(",").map((s) => s.trim());
+      for (const item of blocksArr) {
+        if (!item)
+          continue;
+        const blockedId = await this.resolveIssueId(item);
+        if (blockedId) {
+          await this.createIssueRelation(updatedIssue.id, blockedId, "blocks").catch(() => {});
+        }
+      }
+    }
+    if (params.blockedBy || params.blocks) {
+      return await this.getIssue(updatedIssue.id).catch(() => updatedIssue);
+    }
+    return updatedIssue;
   }
   async createBulkIssues(issues, defaultTeam) {
     const created = [];
@@ -14093,6 +14315,7 @@ var LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
 var init_client = __esm(() => {
   init_config();
   init_formatters();
+  init_types2();
 });
 
 // src/mcp/tools.ts
@@ -14219,6 +14442,39 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
       }
       case "linear_manage_issue": {
         const active = getActiveProfile(args.profileName);
+        if (args.action === "bulk_create") {
+          const defaultTeam = args.teamKey || active?.defaultTeam;
+          const items = (args.issues || []).map((i) => ({
+            teamIdOrKey: i.team || defaultTeam,
+            title: i.title,
+            description: i.description,
+            priority: i.priority,
+            assignee: i.assignee || active?.defaultAssignee,
+            project: i.project,
+            estimate: i.estimate,
+            dueDate: i.dueDate,
+            labels: i.labels,
+            state: i.state,
+            parentId: i.parentId,
+            blockedBy: i.blockedBy,
+            blocks: i.blocks
+          }));
+          const result = await targetClient.createBulkIssues(items, defaultTeam);
+          const parts = [];
+          if (result.created.length > 0) {
+            parts.push(`\u2705 Created ${result.created.length} issue(s):
+
+${formatIssueList(result.created, format)}`);
+          }
+          if (result.errors.length > 0) {
+            parts.push(`\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):
+${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).join(`
+`)}`);
+          }
+          return { content: [{ type: "text", text: parts.join(`
+
+`) }] };
+        }
         if (args.action === "create") {
           const team = args.teamKey || active?.defaultTeam;
           if (!team || !args.title) {
@@ -14234,7 +14490,10 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             estimate: args.estimate,
             dueDate: args.dueDate,
             labels: args.labels,
-            state: args.state
+            state: args.state,
+            parentId: args.parentId,
+            blockedBy: args.blockedBy,
+            blocks: args.blocks
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -14252,7 +14511,10 @@ ${formatIssueDetail(created, format)}` }] };
             estimate: args.estimate,
             dueDate: args.dueDate,
             labels: args.labels,
-            state: args.state
+            state: args.state,
+            parentId: args.parentId,
+            blockedBy: args.blockedBy,
+            blocks: args.blocks
           });
           if (args.commentBody) {
             await targetClient.addComment(args.issueId, args.commentBody);
@@ -14307,7 +14569,10 @@ ${formatIssueDetail(refreshed, format)}` }] };
           estimate: i.estimate,
           dueDate: i.dueDate,
           labels: i.labels,
-          state: i.state
+          state: i.state,
+          parentId: i.parentId,
+          blockedBy: i.blockedBy,
+          blocks: i.blocks
         }));
         const result = await targetClient.createBulkIssues(items, defaultTeam);
         const parts = [];
@@ -14340,6 +14605,9 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
         throw new Error(`Unknown tool name: ${name}`);
     }
   } catch (err) {
+    if (err.suggestions) {
+      return { content: [{ type: "text", text: JSON.stringify(err.suggestions, null, 2) }] };
+    }
     if (err.message?.includes("Linear API Key is missing") || err.message?.includes("Authentication failed") || err.message?.includes("401")) {
       return { content: [{ type: "text", text: getAuthGuidanceMessage() }] };
     }
@@ -14450,13 +14718,13 @@ var init_tools = __esm(() => {
   };
   manageIssueToolSchema = {
     name: "linear_manage_issue",
-    description: "Unified tool to create, update, comment, close, or resolve a Linear issue in a single action call.",
+    description: "Unified tool to create, update, comment, close, resolve, or bulk create Linear issues in a single action call.",
     inputSchema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["create", "update", "comment", "close", "resolve"],
+          enum: ["create", "update", "comment", "close", "resolve", "bulk_create"],
           description: "Action to perform"
         },
         profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
@@ -14475,7 +14743,41 @@ var init_tools = __esm(() => {
           description: "Array of label names or IDs"
         },
         state: { type: "string", description: "Initial workflow state name or ID (e.g., 'Todo', 'In Progress')" },
+        parentId: { type: "string", description: "Parent issue ID or identifier (e.g. 'ENG-100') for issue hierarchy" },
+        blockedBy: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of issue IDs or identifiers that block this issue (e.g. ['ENG-99'])"
+        },
+        blocks: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
+        },
         commentBody: { type: "string", description: "Comment body text" },
+        issues: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              team: { type: "string" },
+              title: { type: "string" },
+              description: { type: "string" },
+              priority: { type: "number" },
+              assignee: { type: "string" },
+              project: { type: "string" },
+              estimate: { type: "number" },
+              dueDate: { type: "string" },
+              labels: { type: "array", items: { type: "string" } },
+              state: { type: "string" },
+              parentId: { type: "string" },
+              blockedBy: { type: "array", items: { type: "string" } },
+              blocks: { type: "array", items: { type: "string" } }
+            },
+            required: ["title"]
+          },
+          description: "List of issue objects for action 'bulk_create'"
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json"],
@@ -14505,7 +14807,10 @@ var init_tools = __esm(() => {
               estimate: { type: "number", description: "Story points estimate" },
               dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
               labels: { type: "array", items: { type: "string" }, description: "Labels" },
-              state: { type: "string", description: "Workflow state name or ID" }
+              state: { type: "string", description: "Workflow state name or ID" },
+              parentId: { type: "string", description: "Parent issue ID or identifier" },
+              blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
+              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
             },
             required: ["title"]
           },
@@ -14562,7 +14867,7 @@ __export(exports_server, {
 async function startMcpServer() {
   const server = new Server({
     name: "belifoa",
-    version: "0.3.0"
+    version: "0.4.0"
   }, {
     capabilities: {
       tools: {}
@@ -14591,6 +14896,11 @@ async function startMcpServer() {
     try {
       return await handleToolCall(name, args || {}, client);
     } catch (err) {
+      if (err.suggestions) {
+        return {
+          content: [{ type: "text", text: JSON.stringify(err.suggestions, null, 2) }]
+        };
+      }
       return {
         content: [{ type: "text", text: `Error executing ${name}: ${err.message}` }],
         isError: true

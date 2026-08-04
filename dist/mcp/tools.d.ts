@@ -205,8 +205,84 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
+            parentId: {
+                type: string;
+                description: string;
+            };
+            blockedBy: {
+                type: string;
+                items: {
+                    type: string;
+                };
+                description: string;
+            };
+            blocks: {
+                type: string;
+                items: {
+                    type: string;
+                };
+                description: string;
+            };
             commentBody: {
                 type: string;
+                description: string;
+            };
+            issues: {
+                type: string;
+                items: {
+                    type: string;
+                    properties: {
+                        team: {
+                            type: string;
+                        };
+                        title: {
+                            type: string;
+                        };
+                        description: {
+                            type: string;
+                        };
+                        priority: {
+                            type: string;
+                        };
+                        assignee: {
+                            type: string;
+                        };
+                        project: {
+                            type: string;
+                        };
+                        estimate: {
+                            type: string;
+                        };
+                        dueDate: {
+                            type: string;
+                        };
+                        labels: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
+                        };
+                        state: {
+                            type: string;
+                        };
+                        parentId: {
+                            type: string;
+                        };
+                        blockedBy: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
+                        };
+                        blocks: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
+                        };
+                    };
+                    required: string[];
+                };
                 description: string;
             };
             format: {
@@ -270,6 +346,24 @@ export declare const bulkCreateIssuesToolSchema: {
                         };
                         state: {
                             type: string;
+                            description: string;
+                        };
+                        parentId: {
+                            type: string;
+                            description: string;
+                        };
+                        blockedBy: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
+                            description: string;
+                        };
+                        blocks: {
+                            type: string;
+                            items: {
+                                type: string;
+                            };
                             description: string;
                         };
                     };

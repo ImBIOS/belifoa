@@ -125,13 +125,13 @@ export const getMyIssuesToolSchema = {
 
 export const manageIssueToolSchema = {
   name: "linear_manage_issue",
-  description: "Unified tool to create, update, comment, close, or resolve a Linear issue in a single action call.",
+  description: "Unified tool to create, update, comment, close, resolve, or bulk create Linear issues in a single action call.",
   inputSchema: {
     type: "object",
     properties: {
       action: {
         type: "string",
-        enum: ["create", "update", "comment", "close", "resolve"],
+        enum: ["create", "update", "comment", "close", "resolve", "bulk_create"],
         description: "Action to perform",
       },
       profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
@@ -150,7 +150,41 @@ export const manageIssueToolSchema = {
         description: "Array of label names or IDs",
       },
       state: { type: "string", description: "Initial workflow state name or ID (e.g., 'Todo', 'In Progress')" },
+      parentId: { type: "string", description: "Parent issue ID or identifier (e.g. 'ENG-100') for issue hierarchy" },
+      blockedBy: {
+        type: "array",
+        items: { type: "string" },
+        description: "Array of issue IDs or identifiers that block this issue (e.g. ['ENG-99'])",
+      },
+      blocks: {
+        type: "array",
+        items: { type: "string" },
+        description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])",
+      },
       commentBody: { type: "string", description: "Comment body text" },
+      issues: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            team: { type: "string" },
+            title: { type: "string" },
+            description: { type: "string" },
+            priority: { type: "number" },
+            assignee: { type: "string" },
+            project: { type: "string" },
+            estimate: { type: "number" },
+            dueDate: { type: "string" },
+            labels: { type: "array", items: { type: "string" } },
+            state: { type: "string" },
+            parentId: { type: "string" },
+            blockedBy: { type: "array", items: { type: "string" } },
+            blocks: { type: "array", items: { type: "string" } },
+          },
+          required: ["title"],
+        },
+        description: "List of issue objects for action 'bulk_create'",
+      },
       format: {
         type: "string",
         enum: ["markdown", "compact_json"],
@@ -182,6 +216,9 @@ export const bulkCreateIssuesToolSchema = {
             dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
             labels: { type: "array", items: { type: "string" }, description: "Labels" },
             state: { type: "string", description: "Workflow state name or ID" },
+            parentId: { type: "string", description: "Parent issue ID or identifier" },
+            blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
+            blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" },
           },
           required: ["title"],
         },
@@ -376,6 +413,39 @@ export async function handleToolCall(
 
       case "linear_manage_issue": {
         const active = getActiveProfile(args.profileName);
+        if (args.action === "bulk_create") {
+          const defaultTeam = args.teamKey || active?.defaultTeam;
+          const items = (args.issues || []).map((i: any) => ({
+            teamIdOrKey: i.team || defaultTeam,
+            title: i.title,
+            description: i.description,
+            priority: i.priority,
+            assignee: i.assignee || active?.defaultAssignee,
+            project: i.project,
+            estimate: i.estimate,
+            dueDate: i.dueDate,
+            labels: i.labels,
+            state: i.state,
+            parentId: i.parentId,
+            blockedBy: i.blockedBy,
+            blocks: i.blocks,
+          }));
+
+          const result = await targetClient.createBulkIssues(items, defaultTeam);
+          const parts: string[] = [];
+          if (result.created.length > 0) {
+            parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format)}`);
+          }
+          if (result.errors.length > 0) {
+            parts.push(
+              `⚠️ Failed to create ${result.errors.length} issue(s):\n${result.errors
+                .map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`)
+                .join("\n")}`
+            );
+          }
+          return { content: [{ type: "text", text: parts.join("\n\n") }] };
+        }
+
         if (args.action === "create") {
           const team = args.teamKey || active?.defaultTeam;
           if (!team || !args.title) {
@@ -392,6 +462,9 @@ export async function handleToolCall(
             dueDate: args.dueDate,
             labels: args.labels,
             state: args.state,
+            parentId: args.parentId,
+            blockedBy: args.blockedBy,
+            blocks: args.blocks,
           });
           return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format)}` }] };
         }
@@ -408,6 +481,9 @@ export async function handleToolCall(
             dueDate: args.dueDate,
             labels: args.labels,
             state: args.state,
+            parentId: args.parentId,
+            blockedBy: args.blockedBy,
+            blocks: args.blocks,
           });
           if (args.commentBody) {
             await targetClient.addComment(args.issueId, args.commentBody);
@@ -459,6 +535,9 @@ export async function handleToolCall(
           dueDate: i.dueDate,
           labels: i.labels,
           state: i.state,
+          parentId: i.parentId,
+          blockedBy: i.blockedBy,
+          blocks: i.blocks,
         }));
 
         const result = await targetClient.createBulkIssues(items, defaultTeam);
@@ -492,6 +571,9 @@ export async function handleToolCall(
         throw new Error(`Unknown tool name: ${name}`);
     }
   } catch (err: any) {
+    if (err.suggestions) {
+      return { content: [{ type: "text", text: JSON.stringify(err.suggestions, null, 2) }] };
+    }
     if (
       err.message?.includes("Linear API Key is missing") ||
       err.message?.includes("Authentication failed") ||

@@ -1,6 +1,14 @@
 import type { LinearIssue, LinearTeam, LinearProject, OutputFormat, AuthProfile } from "./types.js";
 export declare function getPriorityLabel(priority: number): string;
 /**
+ * Generate standard Linear git branch name slug (e.g., "imamuzzaki/ima-49-investigate-listing-issue")
+ */
+export declare function generateGitBranchName(issue: {
+    identifier: string;
+    title: string;
+    assignee?: string;
+}, userPrefix?: string): string;
+/**
  * Clean raw GraphQL issue object into a normalized LinearIssue
  */
 export declare function cleanRawIssue(node: any): LinearIssue;

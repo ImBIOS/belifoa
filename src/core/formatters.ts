@@ -17,22 +17,83 @@ function pad(str: string, length: number): string {
 }
 
 /**
+ * Generate standard Linear git branch name slug (e.g., "imamuzzaki/ima-49-investigate-listing-issue")
+ */
+export function generateGitBranchName(
+  issue: { identifier: string; title: string; assignee?: string },
+  userPrefix?: string
+): string {
+  const idSlug = issue.identifier ? issue.identifier.toLowerCase() : "";
+  const titleSlug = issue.title
+    ? issue.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .substring(0, 50)
+    : "";
+
+  const rawAssignee = userPrefix || issue.assignee;
+  let userSlug = "";
+  if (rawAssignee) {
+    userSlug = rawAssignee
+      .toLowerCase()
+      .replace(/^@/, "")
+      .split(" ")[0]
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  return userSlug ? `${userSlug}/${idSlug}-${titleSlug}` : `${idSlug}-${titleSlug}`;
+}
+
+/**
  * Clean raw GraphQL issue object into a normalized LinearIssue
  */
 export function cleanRawIssue(node: any): LinearIssue {
   const priority = node.priority ?? 0;
+  const identifier = node.identifier;
+  const title = node.title;
+  const assignee = node.assignee?.name || node.assignee?.email;
+
+  const parent = node.parent
+    ? { id: node.parent.id, identifier: node.parent.identifier, title: node.parent.title }
+    : undefined;
+
+  const children = node.children?.nodes
+    ? node.children.nodes.map((c: any) => ({
+        id: c.id,
+        identifier: c.identifier,
+        title: c.title,
+        status: c.state?.name || c.status,
+        priority: c.priority,
+      }))
+    : undefined;
+
+  const relations = node.relations?.nodes
+    ? node.relations.nodes.map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        relatedIssue: {
+          id: r.relatedIssue?.id,
+          identifier: r.relatedIssue?.identifier,
+          title: r.relatedIssue?.title,
+        },
+      }))
+    : undefined;
+
+  const gitBranchName = identifier && title ? generateGitBranchName({ identifier, title, assignee }) : undefined;
+
   return {
     id: node.id,
-    identifier: node.identifier,
-    title: node.title,
+    identifier,
+    title,
     description: node.description ?? undefined,
     priority,
     priorityLabel: getPriorityLabel(priority),
     status: node.state?.name || node.status || "Unknown",
     teamKey: node.team?.key,
-    assignee: node.assignee?.name || node.assignee?.email,
+    assignee,
     project: node.project?.name,
-    labels: node.labels?.nodes ? node.labels.nodes.map((l: any) => l.name) : (node.labels || []),
+    labels: node.labels?.nodes ? node.labels.nodes.map((l: any) => l.name) : node.labels || [],
     estimate: node.estimate ?? undefined,
     dueDate: node.dueDate ?? undefined,
     url: node.url,
@@ -46,6 +107,10 @@ export function cleanRawIssue(node: any): LinearIssue {
           user: c.user ? { id: c.user.id, name: c.user.name, email: c.user.email } : undefined,
         }))
       : undefined,
+    parent,
+    children,
+    relations,
+    gitBranchName,
   };
 }
 
@@ -143,6 +208,10 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
       estimate: issue.estimate,
       dueDate: issue.dueDate,
       url: issue.url,
+      gitBranchName: issue.gitBranchName,
+      parent: issue.parent ? (issue.parent.identifier || issue.parent.id) : undefined,
+      children: issue.children && issue.children.length > 0 ? issue.children.map((c) => c.identifier || c.id) : undefined,
+      relations: issue.relations && issue.relations.length > 0 ? issue.relations.map((r) => ({ type: r.type, issue: r.relatedIssue?.identifier || r.relatedIssue?.id })) : undefined,
       description: issue.description,
     };
     if (issue.comments && issue.comments.length > 0) {
@@ -165,6 +234,18 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
       `- **Assignee**: ${issue.assignee ? `@${issue.assignee}` : "Unassigned"}`,
       `- **Team**: ${issue.teamKey || "N/A"}`,
     ];
+
+    if (issue.gitBranchName) lines.push(`- **Git Branch**: \`${issue.gitBranchName}\``);
+    if (issue.parent) lines.push(`- **Parent**: [${issue.parent.identifier}] ${issue.parent.title}`);
+    if (issue.children && issue.children.length > 0) {
+      lines.push(`- **Children**: ${issue.children.map((c) => `[${c.identifier}] ${c.title}`).join(", ")}`);
+    }
+    if (issue.relations && issue.relations.length > 0) {
+      const relStr = issue.relations
+        .map((r) => `${r.type.toUpperCase()}: [${r.relatedIssue?.identifier}] ${r.relatedIssue?.title}`)
+        .join("; ");
+      lines.push(`- **Relations**: ${relStr}`);
+    }
 
     if (issue.project) lines.push(`- **Project**: ${issue.project}`);
     if (issue.labels && issue.labels.length > 0) lines.push(`- **Labels**: ${issue.labels.join(", ")}`);
@@ -196,6 +277,16 @@ export function formatIssueDetail(issue: LinearIssue, format: OutputFormat = "cl
     `  \x1b[1mAssignee\x1b[0m:  ${issue.assignee ? `@${issue.assignee}` : "Unassigned"}`,
     `  \x1b[1mTeam\x1b[0m:      ${issue.teamKey || "N/A"}`,
   ];
+
+  if (issue.gitBranchName) lines.push(`  \x1b[1mGit Branch\x1b[0m: \x1b[33m${issue.gitBranchName}\x1b[0m`);
+  if (issue.parent) lines.push(`  \x1b[1mParent\x1b[0m:     [${issue.parent.identifier}] ${issue.parent.title}`);
+  if (issue.children && issue.children.length > 0) {
+    lines.push(`  \x1b[1mChildren\x1b[0m:   ${issue.children.map((c) => `[${c.identifier}]`).join(", ")}`);
+  }
+  if (issue.relations && issue.relations.length > 0) {
+    const relStr = issue.relations.map((r) => `${r.type}: [${r.relatedIssue?.identifier}]`).join(", ");
+    lines.push(`  \x1b[1mRelations\x1b[0m:  ${relStr}`);
+  }
 
   if (issue.project) lines.push(`  \x1b[1mProject\x1b[0m:   ${issue.project}`);
   if (issue.labels && issue.labels.length > 0) lines.push(`  \x1b[1mLabels\x1b[0m:    ${issue.labels.join(", ")}`);

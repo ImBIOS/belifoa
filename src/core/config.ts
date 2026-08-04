@@ -155,6 +155,46 @@ export function detectProfileFromGitRemote(
 }
 
 /**
+ * Auto-detect team key from folder name or Git repository name
+ */
+export function detectTeamFromCwd(
+  profile: AuthProfile,
+  cwd: string = process.cwd()
+): string | null {
+  if (!profile.teams || profile.teams.length === 0) return null;
+
+  const folderName = cwd.split("/").filter(Boolean).pop()?.toLowerCase() || "";
+  const remoteUrl = getGitRemoteUrl(cwd);
+  let repoName = "";
+  if (remoteUrl) {
+    const match = remoteUrl.match(/[\/:]([^\/:]+)\.git$/) || remoteUrl.match(/[\/:]([^\/:]+)$/);
+    if (match) repoName = match[1].toLowerCase();
+  }
+
+  const candidates = [folderName, repoName].filter(Boolean);
+
+  for (const candidate of candidates) {
+    // 1. Exact match on team key (case-insensitive)
+    const exactKey = profile.teams.find((t) => t.key.toLowerCase() === candidate);
+    if (exactKey) return exactKey.key.toUpperCase();
+
+    // 2. Exact match on team name (case-insensitive)
+    const exactName = profile.teams.find((t) => t.name.toLowerCase() === candidate);
+    if (exactName) return exactName.key.toUpperCase();
+
+    // 3. Substring match (e.g., "orderly-app" matches team key "ORDERLY" or team name "Orderly")
+    const subMatch = profile.teams.find((t) => {
+      const k = t.key.toLowerCase();
+      const n = t.name.toLowerCase();
+      return candidate.includes(k) || k.includes(candidate) || candidate.includes(n) || n.includes(candidate);
+    });
+    if (subMatch) return subMatch.key.toUpperCase();
+  }
+
+  return null;
+}
+
+/**
  * Save project-local .belifoarc.json in target or current directory
  */
 export function saveProjectConfig(
@@ -210,6 +250,11 @@ export function getActiveProfile(overrideProfileName?: string): AuthProfile | nu
     if (envKey) active.apiKey = envKey;
     if (envTeam || projectConfig?.team) {
       active.defaultTeam = envTeam || projectConfig?.team;
+    } else if (!active.defaultTeam) {
+      const autoTeam = detectTeamFromCwd(active);
+      if (autoTeam) {
+        active.defaultTeam = autoTeam;
+      }
     }
     const assigneeVal = envAssignee || projectConfig?.defaultAssignee || active.defaultAssignee;
     if (assigneeVal) {

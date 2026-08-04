@@ -1,13 +1,14 @@
 import { loadConfig, getActiveProfile } from "./config.js";
 import { cleanRawIssue } from "./formatters.js";
-import type {
-  LinearIssue,
-  LinearTeam,
-  LinearProject,
-  LinearUser,
-  LinearOrganization,
-  CreateIssueParams,
-  UpdateIssueParams,
+import {
+  BelifoaSuggestionError,
+  type LinearIssue,
+  type LinearTeam,
+  type LinearProject,
+  type LinearUser,
+  type LinearOrganization,
+  type CreateIssueParams,
+  type UpdateIssueParams,
 } from "./types.js";
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
@@ -163,6 +164,38 @@ export class BelifoaClient {
   }
 
   /**
+   * Resolve identifier (e.g. "ENG-123") or ID to Issue UUID
+   */
+  async resolveIssueId(identifierOrId: string): Promise<string> {
+    if (!identifierOrId) return "";
+    if (identifierOrId.includes("-") && identifierOrId.length > 25) return identifierOrId;
+
+    const issue = await this.getIssue(identifierOrId);
+    return issue.id;
+  }
+
+  /**
+   * Create an issue relation (e.g. blocking/blockedBy/duplicate)
+   */
+  async createIssueRelation(
+    issueId: string,
+    relatedIssueId: string,
+    type: "blocks" | "duplicate" | "related" = "blocks"
+  ): Promise<boolean> {
+    const mutation = `
+      mutation CreateIssueRelation($input: IssueRelationCreateInput!) {
+        issueRelationCreate(input: $input) {
+          success
+        }
+      }
+    `;
+    const data = await this.graphql<{ issueRelationCreate: { success: boolean } }>(mutation, {
+      input: { issueId, relatedIssueId, type },
+    });
+    return data.issueRelationCreate?.success ?? false;
+  }
+
+  /**
    * Resolve assignee (id, email, or name) to User ID
    */
   async resolveUserId(assigneeStr: string): Promise<string | undefined> {
@@ -183,7 +216,15 @@ export class BelifoaClient {
         u.name.toLowerCase() === cleanStr ||
         u.name.toLowerCase().includes(cleanStr)
     );
-    return match?.id;
+
+    if (!match) {
+      throw new BelifoaSuggestionError(`Assignee '${assigneeStr}' not found in workspace.`, {
+        error: `Assignee '${assigneeStr}' not found in workspace`,
+        availableUsers: users.map((u) => ({ name: u.name, email: u.email, id: u.id })),
+      });
+    }
+
+    return match.id;
   }
 
   /**
@@ -198,7 +239,15 @@ export class BelifoaClient {
     const match = projects.find(
       (p) => p.id === projectStr || p.name.toLowerCase() === cleanStr || p.name.toLowerCase().includes(cleanStr)
     );
-    return match?.id;
+
+    if (!match) {
+      throw new BelifoaSuggestionError(`Project '${projectStr}' not found in workspace.`, {
+        error: `Project '${projectStr}' not found in workspace`,
+        availableProjects: projects.map((p) => ({ name: p.name, id: p.id, state: p.state })),
+      });
+    }
+
+    return match.id;
   }
 
   /**
@@ -218,7 +267,14 @@ export class BelifoaClient {
       match = states.find((s) => s.type.toLowerCase() === "completed");
     }
 
-    return match?.id;
+    if (!match) {
+      throw new BelifoaSuggestionError(`State '${stateStr}' not found for team.`, {
+        error: `State '${stateStr}' not found for team`,
+        availableStates: states.map((s) => ({ name: s.name, type: s.type, id: s.id })),
+      });
+    }
+
+    return match.id;
   }
 
   /**
@@ -281,6 +337,9 @@ export class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -321,6 +380,9 @@ export class BelifoaClient {
           assignee { name email }
           project { name }
           labels { nodes { name } }
+          parent { id identifier title }
+          children { nodes { id identifier title priority state { name } } }
+          relations { nodes { id type relatedIssue { id identifier title } } }
           comments(first: 20) {
             nodes {
               id
@@ -364,6 +426,9 @@ export class BelifoaClient {
               assignee { name email }
               project { name }
               labels { nodes { name } }
+              parent { id identifier title }
+              children { nodes { id identifier title priority state { name } } }
+              relations { nodes { id type relatedIssue { id identifier title } } }
             }
           }
         }
@@ -382,18 +447,24 @@ export class BelifoaClient {
    */
   async createIssue(params: CreateIssueParams): Promise<LinearIssue> {
     let teamId = params.teamIdOrKey;
-    if (!params.teamIdOrKey.includes("-") || params.teamIdOrKey.length < 10) {
-      const teams = await this.getTeams();
-      const match = teams.find(
-        (t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey
-      );
-      if (match) teamId = match.id;
+    const teams = await this.getTeams();
+    const match = teams.find(
+      (t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey
+    );
+    if (match) {
+      teamId = match.id;
+    } else {
+      throw new BelifoaSuggestionError(`Team '${params.teamIdOrKey}' not found in workspace.`, {
+        error: `Team '${params.teamIdOrKey}' not found in workspace`,
+        availableTeams: teams.map((t) => ({ key: t.key, name: t.name, id: t.id })),
+      });
     }
 
     const assigneeId = params.assignee ? await this.resolveUserId(params.assignee) : undefined;
     const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
     const stateId = params.state ? await this.resolveStateId(teamId, params.state) : undefined;
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
+    const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
 
     const mutation = `
       mutation CreateIssue($input: IssueCreateInput!) {
@@ -414,6 +485,9 @@ export class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -430,6 +504,7 @@ export class BelifoaClient {
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
       labelIds,
+      parentId,
     };
 
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
@@ -439,7 +514,35 @@ export class BelifoaClient {
       throw new Error("Failed to create Linear issue.");
     }
 
-    return cleanRawIssue(data.issueCreate.issue);
+    const createdIssue = cleanRawIssue(data.issueCreate.issue);
+
+    if (params.blockedBy) {
+      const blockedByArr = Array.isArray(params.blockedBy) ? params.blockedBy : params.blockedBy.split(",").map((s) => s.trim());
+      for (const item of blockedByArr) {
+        if (!item) continue;
+        const blockingId = await this.resolveIssueId(item);
+        if (blockingId) {
+          await this.createIssueRelation(blockingId, createdIssue.id, "blocks").catch(() => {});
+        }
+      }
+    }
+
+    if (params.blocks) {
+      const blocksArr = Array.isArray(params.blocks) ? params.blocks : params.blocks.split(",").map((s) => s.trim());
+      for (const item of blocksArr) {
+        if (!item) continue;
+        const blockedId = await this.resolveIssueId(item);
+        if (blockedId) {
+          await this.createIssueRelation(createdIssue.id, blockedId, "blocks").catch(() => {});
+        }
+      }
+    }
+
+    if (params.blockedBy || params.blocks) {
+      return await this.getIssue(createdIssue.id).catch(() => createdIssue);
+    }
+
+    return createdIssue;
   }
 
   /**
@@ -455,6 +558,7 @@ export class BelifoaClient {
     const projectId = params.project ? await this.resolveProjectId(params.project) : undefined;
     const stateId = params.state && teamId ? await this.resolveStateId(teamId, params.state) : undefined;
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
+    const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
 
     const mutation = `
       mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
@@ -475,6 +579,9 @@ export class BelifoaClient {
             assignee { name email }
             project { name }
             labels { nodes { name } }
+            parent { id identifier title }
+            children { nodes { id identifier title priority state { name } } }
+            relations { nodes { id type relatedIssue { id identifier title } } }
           }
         }
       }
@@ -490,6 +597,7 @@ export class BelifoaClient {
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
       labelIds,
+      parentId,
     };
 
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
@@ -503,7 +611,35 @@ export class BelifoaClient {
       throw new Error(`Failed to update issue ${id}`);
     }
 
-    return cleanRawIssue(data.issueUpdate.issue);
+    const updatedIssue = cleanRawIssue(data.issueUpdate.issue);
+
+    if (params.blockedBy) {
+      const blockedByArr = Array.isArray(params.blockedBy) ? params.blockedBy : params.blockedBy.split(",").map((s) => s.trim());
+      for (const item of blockedByArr) {
+        if (!item) continue;
+        const blockingId = await this.resolveIssueId(item);
+        if (blockingId) {
+          await this.createIssueRelation(blockingId, updatedIssue.id, "blocks").catch(() => {});
+        }
+      }
+    }
+
+    if (params.blocks) {
+      const blocksArr = Array.isArray(params.blocks) ? params.blocks : params.blocks.split(",").map((s) => s.trim());
+      for (const item of blocksArr) {
+        if (!item) continue;
+        const blockedId = await this.resolveIssueId(item);
+        if (blockedId) {
+          await this.createIssueRelation(updatedIssue.id, blockedId, "blocks").catch(() => {});
+        }
+      }
+    }
+
+    if (params.blockedBy || params.blocks) {
+      return await this.getIssue(updatedIssue.id).catch(() => updatedIssue);
+    }
+
+    return updatedIssue;
   }
 
   /**

@@ -49,6 +49,28 @@ export interface LinearIssue {
     createdAt?: string;
     updatedAt?: string;
     comments?: LinearComment[];
+    parent?: {
+        id: string;
+        identifier: string;
+        title: string;
+    };
+    children?: Array<{
+        id: string;
+        identifier: string;
+        title: string;
+        status?: string;
+        priority?: number;
+    }>;
+    relations?: Array<{
+        id: string;
+        type: string;
+        relatedIssue: {
+            id: string;
+            identifier: string;
+            title: string;
+        };
+    }>;
+    gitBranchName?: string;
 }
 export interface CreateIssueParams {
     teamIdOrKey: string;
@@ -61,6 +83,9 @@ export interface CreateIssueParams {
     dueDate?: string;
     labels?: string[] | string;
     state?: string;
+    parentId?: string;
+    blockedBy?: string[] | string;
+    blocks?: string[] | string;
 }
 export interface UpdateIssueParams {
     title?: string;
@@ -72,6 +97,13 @@ export interface UpdateIssueParams {
     dueDate?: string;
     labels?: string[] | string;
     state?: string;
+    parentId?: string;
+    blockedBy?: string[] | string;
+    blocks?: string[] | string;
+}
+export declare class BelifoaSuggestionError extends Error {
+    suggestions: Record<string, any>;
+    constructor(message: string, suggestions: Record<string, any>);
 }
 export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";
 export interface AuthProfile {

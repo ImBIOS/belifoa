@@ -55,6 +55,10 @@ export interface LinearIssue {
   createdAt?: string;
   updatedAt?: string;
   comments?: LinearComment[];
+  parent?: { id: string; identifier: string; title: string };
+  children?: Array<{ id: string; identifier: string; title: string; status?: string; priority?: number }>;
+  relations?: Array<{ id: string; type: string; relatedIssue: { id: string; identifier: string; title: string } }>;
+  gitBranchName?: string;
 }
 
 export interface CreateIssueParams {
@@ -68,6 +72,9 @@ export interface CreateIssueParams {
   dueDate?: string; // YYYY-MM-DD
   labels?: string[] | string; // label names or ids
   state?: string; // stateId or state name (e.g., "In Progress", "Todo")
+  parentId?: string; // Parent issue ID or identifier (e.g., "ENG-100")
+  blockedBy?: string[] | string; // Issue ID(s) or identifier(s) that block this issue
+  blocks?: string[] | string; // Issue ID(s) or identifier(s) that this issue blocks
 }
 
 export interface UpdateIssueParams {
@@ -80,6 +87,19 @@ export interface UpdateIssueParams {
   dueDate?: string;
   labels?: string[] | string;
   state?: string;
+  parentId?: string; // Parent issue ID or identifier
+  blockedBy?: string[] | string;
+  blocks?: string[] | string;
+}
+
+export class BelifoaSuggestionError extends Error {
+  public suggestions: Record<string, any>;
+
+  constructor(message: string, suggestions: Record<string, any>) {
+    super(message);
+    this.name = "BelifoaSuggestionError";
+    this.suggestions = suggestions;
+  }
 }
 
 export type OutputFormat = "markdown" | "compact_json" | "raw_json" | "cli_table";

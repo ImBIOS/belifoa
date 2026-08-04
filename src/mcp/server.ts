@@ -22,7 +22,7 @@ export async function startMcpServer() {
   const server = new Server(
     {
       name: "belifoa",
-      version: "0.3.0",
+      version: "0.4.0",
     },
     {
       capabilities: {
@@ -56,6 +56,11 @@ export async function startMcpServer() {
     try {
       return await handleToolCall(name, args || {}, client);
     } catch (err: any) {
+      if (err.suggestions) {
+        return {
+          content: [{ type: "text", text: JSON.stringify(err.suggestions, null, 2) }],
+        };
+      }
       return {
         content: [{ type: "text", text: `Error executing ${name}: ${err.message}` }],
         isError: true,

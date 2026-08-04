@@ -19,6 +19,10 @@ export declare function getGitRemoteUrl(cwd?: string): string | null;
  */
 export declare function detectProfileFromGitRemote(config: BelifoaConfig, cwd?: string): AuthProfile | null;
 /**
+ * Auto-detect team key from folder name or Git repository name
+ */
+export declare function detectTeamFromCwd(profile: AuthProfile, cwd?: string): string | null;
+/**
  * Save project-local .belifoarc.json in target or current directory
  */
 export declare function saveProjectConfig(projectDir: string, configData: {

@@ -10,6 +10,11 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 ## Core Capabilities
 - **Persistent Auth**: Uses `LINEAR_API_KEY` (Personal API Key) or `~/.config/belifoa/config.json`.
 - **70%+ Token Footprint Savings**: Formatted Markdown tables/cards instead of massive, raw GraphQL API JSON objects.
+- **Smart Zero-Config Repo / Team Auto-Detection**: Automatically detects matching workspace profile and team key from Git remote URL or directory name when `--team` is omitted.
+- **Git Branch Helper**: Generate and checkout standard Linear branch names (`belifoa branch ENG-123 --checkout`).
+- **Hierarchy & Relations**: Support for `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tools.
+- **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create", issues: [...] })`.
+- **Self-Correcting LLM Errors**: Structured JSON errors returning valid `availableTeams`, `availableStates`, `availableUsers`, and `availableProfiles` on invalid inputs so agents self-correct in 1 turn.
 
 ## Usage Modes
 
@@ -26,8 +31,11 @@ bun x github:ImBIOS/belifoa#canary search "login bug" --team ENG
 # Get detailed issue view
 bun x github:ImBIOS/belifoa#canary issue ENG-123
 
-# Create an issue
-bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1
+# Get git branch name slug or checkout branch
+bun x github:ImBIOS/belifoa#canary branch ENG-123 --checkout
+
+# Create an issue (with hierarchy and relations)
+bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1 --parent ENG-100 --blocked-by ENG-99
 
 # Update an existing issue
 bun x github:ImBIOS/belifoa#canary update ENG-123 --state "In Progress" --assignee me -c "Started working on fix"
@@ -44,8 +52,10 @@ When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp`, use these co
 - `linear_get_issue({ id: "ENG-123", format: "markdown" })`
 - `linear_search_issues({ query: "auth bug", teamKey: "ENG" })`
 - `linear_get_my_issues()`
+- `linear_manage_issue({ action: "create", title: "Subtask fix", parentId: "ENG-100", blockedBy: ["ENG-99"] })`
 - `linear_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
 - `linear_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
-- `linear_manage_issue({ action: "comment", issueId: "ENG-123", commentBody: "Fixed in commit abc123" })`
+- `linear_manage_issue({ action: "bulk_create", issues: [{ title: "Task 1" }, { title: "Task 2" }] })`
+- `linear_bulk_create_issues({ issues: [{ title: "Feature A", parentId: "ENG-100" }] })`
 - `linear_get_teams_and_projects()`
 - `linear_get_labels()`

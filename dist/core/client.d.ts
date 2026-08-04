@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearTeam, LinearProject, LinearUser, LinearOrganization, CreateIssueParams, UpdateIssueParams } from "./types.js";
+import { type LinearIssue, type LinearTeam, type LinearProject, type LinearUser, type LinearOrganization, type CreateIssueParams, type UpdateIssueParams } from "./types.js";
 export declare class BelifoaClient {
     private apiKey;
     private profileName?;
@@ -33,6 +33,14 @@ export declare class BelifoaClient {
         name: string;
         type: string;
     }>>;
+    /**
+     * Resolve identifier (e.g. "ENG-123") or ID to Issue UUID
+     */
+    resolveIssueId(identifierOrId: string): Promise<string>;
+    /**
+     * Create an issue relation (e.g. blocking/blockedBy/duplicate)
+     */
+    createIssueRelation(issueId: string, relatedIssueId: string, type?: "blocks" | "duplicate" | "related"): Promise<boolean>;
     /**
      * Resolve assignee (id, email, or name) to User ID
      */

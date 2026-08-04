@@ -19,6 +19,7 @@ import {
   formatProfiles,
   formatLabels,
   cleanRawIssue,
+  generateGitBranchName,
 } from "../core/formatters.js";
 import type { OutputFormat } from "../core/types.js";
 import { readFileSync } from "node:fs";
@@ -28,7 +29,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.3.2");
+  .version("0.4.0");
 
 // Init command to create project-local config
 program
@@ -276,6 +277,30 @@ program
     }
   });
 
+// Git branch helper command
+program
+  .command("branch <id>")
+  .description("Get git branch name slug for a Linear issue (e.g. ENG-123)")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("-c, --checkout", "Execute git checkout -b with the generated branch name")
+  .action(async (id: string, options) => {
+    try {
+      const client = new BelifoaClient(undefined, options.profile);
+      const issue = await client.getIssue(id);
+      const branchName = issue.gitBranchName || generateGitBranchName(issue);
+      if (options.checkout) {
+        const { execSync } = await import("node:child_process");
+        console.log(`Checking out branch: ${branchName}`);
+        execSync(`git checkout -b "${branchName}"`, { stdio: "inherit" });
+      } else {
+        console.log(branchName);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // Create issue command
 program
   .command("create")
@@ -293,6 +318,9 @@ program
   .option("--due-date <date>", "Due date (YYYY-MM-DD)")
   .option("-l, --labels <labels>", "Comma-separated issue labels")
   .option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')")
+  .option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')")
+  .option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue")
+  .option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -317,6 +345,9 @@ program
         dueDate: options.dueDate,
         labels: options.labels,
         state: options.state,
+        parentId: options.parent,
+        blockedBy: options.blockedBy,
+        blocks: options.blocks,
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat));
     } catch (err: any) {
@@ -342,6 +373,9 @@ program
   .option("--due-date <date>", "Due date (YYYY-MM-DD)")
   .option("-l, --labels <labels>", "Comma-separated issue labels")
   .option("-s, --state <state>", "Workflow state ID or name (e.g. 'In Progress', 'Done')")
+  .option("--parent <id>", "Parent issue ID or identifier")
+  .option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue")
+  .option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue")
   .option("-c, --comment <comment>", "Add a comment along with the update")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (id: string, options) => {
@@ -360,6 +394,9 @@ program
         dueDate: options.dueDate,
         labels: options.labels,
         state: options.state,
+        parentId: options.parent,
+        blockedBy: options.blockedBy,
+        blocks: options.blocks,
       });
 
       if (options.comment) {
