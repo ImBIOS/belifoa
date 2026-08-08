@@ -6,7 +6,7 @@ beforeAll(() => {
 
 import { BelifoaClient } from "../src/core/client.js";
 import { formatLabels, generateGitBranchName, cleanRawIssue, formatIssueDetail, formatActiveProfileBanner, formatIssueList } from "../src/core/formatters.js";
-import { addProfile, getActiveProfile, switchProfile, detectTeamFromCwd, getProjectConfig } from "../src/core/config.js";
+import { addProfile, getActiveProfile, switchProfile, switchDefaultTeam, detectTeamFromCwd, getProjectConfig } from "../src/core/config.js";
 import { BelifoaSuggestionError } from "../src/core/types.js";
 import { handleToolCall, getMcpToolSchemas } from "../src/mcp/tools.js";
 import { writeFileSync, rmSync, mkdirSync } from "node:fs";
@@ -257,5 +257,103 @@ describe("Belifoa New Features Unit Tests", () => {
     const outputMd = formatIssueList(issues, "markdown", profile);
     expect(outputMd).toContain("[belifoa] Active Profile");
     expect(outputMd).toContain("MYR-1");
+  });
+
+  it("5. searchIssues uses issues query for empty query and searchIssues query for non-empty query", async () => {
+    const client = new BelifoaClient("fake-key");
+    let lastQuery = "";
+    let lastVariables: any = {};
+
+    client["graphql"] = async (queryStr: string, variables: any) => {
+      lastQuery = queryStr;
+      lastVariables = variables;
+      if (queryStr.includes("query ListIssues")) {
+        return { issues: { nodes: [{ id: "1", identifier: "ENG-1", title: "Test", priority: 0 }] } } as any;
+      }
+      return { searchIssues: { nodes: [{ id: "2", identifier: "ENG-2", title: "Search Test", priority: 0 }] } } as any;
+    };
+
+    const emptyResult = await client.searchIssues("");
+    expect(lastQuery).toContain("query ListIssues");
+    expect(emptyResult[0].identifier).toBe("ENG-1");
+
+    const searchResult = await client.searchIssues("search text");
+    expect(lastQuery).toContain("query SearchIssues");
+    expect(lastVariables.term).toBe("search text");
+    expect(searchResult[0].identifier).toBe("ENG-2");
+  });
+
+  it("6. switchDefaultTeam resolves active profile when profileName is omitted and validates accessible teams", () => {
+    addProfile(
+      "playzuzu",
+      "key1",
+      { id: "o1", name: "ZuZu", urlKey: "zuzu" },
+      "ZUZ",
+      [{ key: "ZUZ", name: "ZuZu Team" }]
+    );
+    addProfile(
+      "myrehat",
+      "key2",
+      { id: "o2", name: "MyRehat", urlKey: "myrehat" },
+      "MYR",
+      [{ key: "MYR", name: "MyRehat Team" }]
+    );
+
+    switchProfile("playzuzu");
+
+    // Switching default team without profileName should modify active profile ('playzuzu'), not profiles[0] ('assignee-test' or 'myrehat')
+    const updated = switchDefaultTeam("ZUZ");
+    expect(updated.name).toBe("playzuzu");
+    expect(updated.defaultTeam).toBe("ZUZ");
+
+    // Attempting to switch to inaccessible team in profile throws error
+    expect(() => switchDefaultTeam("INVALID_TEAM")).toThrow("is not accessible in profile 'playzuzu'");
+  });
+
+  it("7. addProfile validates defaultTeam against accessible teams", () => {
+    const profile = addProfile(
+      "leak-test",
+      "key-leak",
+      { id: "o3", name: "Org3", urlKey: "o3" },
+      "INVALID_TEAM",
+      [{ key: "ACCESSIBLE", name: "Accessible Team" }]
+    );
+
+    expect(profile.defaultTeam).toBe("ACCESSIBLE");
+  });
+
+  it("8. createIssue with checkExisting returns existing issue if title matches", async () => {
+    const client = new BelifoaClient("fake-key");
+    const existingIssue = {
+      id: "ex-1",
+      identifier: "ZUZ-75",
+      title: "Pre-generate demo assets",
+      priority: 2,
+      status: "In Progress",
+      teamKey: "ZUZ",
+    };
+
+    client.getTeams = async () => [{ id: "t-zuz", key: "ZUZ", name: "ZuZu" }];
+    client.searchIssues = async (queryStr: string) => {
+      if (queryStr === "Pre-generate demo assets") {
+        return [existingIssue as any];
+      }
+      return [];
+    };
+
+    let mutationCalled = false;
+    client["graphql"] = async () => {
+      mutationCalled = true;
+      return {} as any;
+    };
+
+    const result = await client.createIssue({
+      teamIdOrKey: "ZUZ",
+      title: "Pre-generate demo assets",
+      checkExisting: true,
+    });
+
+    expect(result.identifier).toBe("ZUZ-75");
+    expect(mutationCalled).toBe(false);
   });
 });

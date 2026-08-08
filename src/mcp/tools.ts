@@ -162,6 +162,8 @@ export const manageIssueToolSchema = {
         description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])",
       },
       commentBody: { type: "string", description: "Comment body text" },
+      checkExisting: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating" },
+      idempotent: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating (alias)" },
       issues: {
         type: "array",
         items: {
@@ -225,6 +227,8 @@ export const bulkCreateIssuesToolSchema = {
         description: "List of issue objects to create",
       },
       defaultTeamKey: { type: "string", description: "Default team key if omitted in individual issue items" },
+      checkExisting: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team" },
+      idempotent: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team (alias)" },
       profileName: { type: "string", description: "Target workspace profile name" },
       format: {
         type: "string",
@@ -299,6 +303,8 @@ export function getMcpToolSchemas(overrideProfileName?: string): Array<{ name: s
           labels: { type: "array", items: { type: "string" } },
           state: { type: "string", description: "Initial workflow state" },
           parentId: { type: "string", description: "Parent issue ID" },
+          checkExisting: { type: "boolean", description: "If true, check if issue with same title exists before creating" },
+          idempotent: { type: "boolean", description: "If true, check if issue with same title exists before creating (alias)" },
           profileName: { type: "string", description: "Target workspace profile name" },
           format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" },
         },
@@ -537,6 +543,7 @@ export async function handleToolCall(
       case "manage_issue": {
         if (args.action === "bulk_create") {
           const defaultTeam = args.teamKey || active?.defaultTeam;
+          const checkExisting = Boolean(args.checkExisting || args.idempotent);
           const items = (args.issues || []).map((i: any) => ({
             teamIdOrKey: i.team || defaultTeam,
             title: i.title,
@@ -553,7 +560,7 @@ export async function handleToolCall(
             blocks: i.blocks,
           }));
 
-          const result = await targetClient.createBulkIssues(items, defaultTeam);
+          const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
           const parts: string[] = [];
           if (result.created.length > 0) {
             parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format, active)}`);
@@ -587,6 +594,7 @@ export async function handleToolCall(
             parentId: args.parentId,
             blockedBy: args.blockedBy,
             blocks: args.blocks,
+            checkExisting: Boolean(args.checkExisting || args.idempotent),
           });
           return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format, active)}` }] };
         }
@@ -645,6 +653,7 @@ export async function handleToolCall(
 
       case "bulk_create_issues": {
         const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
+        const checkExisting = Boolean(args.checkExisting || args.idempotent);
         const items = (args.issues || []).map((i: any) => ({
           teamIdOrKey: i.team || defaultTeam,
           title: i.title,
@@ -661,7 +670,7 @@ export async function handleToolCall(
           blocks: i.blocks,
         }));
 
-        const result = await targetClient.createBulkIssues(items, defaultTeam);
+        const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
         const parts: string[] = [];
         if (result.created.length > 0) {
           parts.push(`✅ Created ${result.created.length} issue(s):\n\n${formatIssueList(result.created, format, active)}`);

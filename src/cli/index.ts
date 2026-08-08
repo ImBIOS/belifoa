@@ -10,6 +10,7 @@ import {
   getActiveProfile,
   switchDefaultTeam,
   saveProjectConfig,
+  getProjectConfig,
 } from "../core/config.js";
 import {
   formatIssueList,
@@ -29,7 +30,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.5.0");
+  .version("0.5.1");
 
 // Init command to create project-local config
 program
@@ -124,6 +125,11 @@ authCmd
     try {
       const profile = switchProfile(profileName);
       console.log(`✅ Switched active workspace profile to: '${profile.name}' (${profile.organization?.name || "N/A"})`);
+      const projConf = getProjectConfig();
+      if (projConf?.profile && projConf.profile !== profileName) {
+        console.log(`⚠️ Note: Project-local config (.belifoarc.json) in this directory is set to profile '${projConf.profile}'.`);
+        console.log(`   Commands run in this directory will continue using '${projConf.profile}' unless overridden with -p.`);
+      }
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
       process.exit(1);
@@ -189,6 +195,11 @@ workspaceCmd
     try {
       const profile = switchProfile(profileName);
       console.log(`✅ Active workspace switched to: '${profile.name}' (${profile.organization?.name || "N/A"})`);
+      const projConf = getProjectConfig();
+      if (projConf?.profile && projConf.profile !== profileName) {
+        console.log(`⚠️ Note: Project-local config (.belifoarc.json) in this directory is set to profile '${projConf.profile}'.`);
+        console.log(`   Commands run in this directory will continue using '${projConf.profile}' unless overridden with -p.`);
+      }
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
       process.exit(1);
@@ -353,7 +364,7 @@ program
   .description("Get git branch name slug for a Linear issue (e.g. ENG-123)")
   .option("-p, --profile <profile>", "Target workspace profile")
   .option("-w, --workspace <profile>", "Target workspace profile (alias)")
-  .option("-c, --checkout", "Execute git checkout -b with the generated branch name")
+  .option("-c, -b, --checkout", "Execute git checkout -b with the generated branch name")
   .action(async (id: string, options) => {
     try {
       const profileName = options.profile || options.workspace;
@@ -363,7 +374,11 @@ program
       if (options.checkout) {
         const { execSync } = await import("node:child_process");
         console.log(`Checking out branch: ${branchName}`);
-        execSync(`git checkout -b "${branchName}"`, { stdio: "inherit" });
+        try {
+          execSync(`git checkout -b "${branchName}"`, { stdio: "inherit" });
+        } catch {
+          execSync(`git checkout "${branchName}"`, { stdio: "inherit" });
+        }
       } else {
         console.log(branchName);
       }
@@ -394,6 +409,8 @@ program
   .option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')")
   .option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue")
   .option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue")
+  .option("--check-existing", "Check if issue with same title exists in team before creating")
+  .option("--idempotent", "Check if issue with same title exists in team before creating (alias)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -422,6 +439,7 @@ program
         parentId: options.parent,
         blockedBy: options.blockedBy,
         blocks: options.blocks,
+        checkExisting: Boolean(options.checkExisting || options.idempotent),
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat, active));
     } catch (err: any) {
@@ -550,6 +568,8 @@ program
   .option("-p, --profile <profile>", "Target workspace profile")
   .option("-w, --workspace <profile>", "Target workspace profile (alias)")
   .option("-t, --team <team>", "Default team key/ID if omitted in task items")
+  .option("--check-existing", "Check if issue with same title exists in team before creating")
+  .option("--idempotent", "Check if issue with same title exists in team before creating (alias)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -574,7 +594,8 @@ program
 
       console.log(`📦 Importing ${issuesArray.length} issue(s)...`);
       const client = new BelifoaClient(undefined, profileName);
-      const result = await client.createBulkIssues(issuesArray, defaultTeam);
+      const checkExisting = Boolean(options.checkExisting || options.idempotent);
+      const result = await client.createBulkIssues(issuesArray, defaultTeam, checkExisting);
 
       if (result.created.length > 0) {
         console.log(`\n✅ Successfully created ${result.created.length} issue(s):`);

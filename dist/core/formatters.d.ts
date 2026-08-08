@@ -1,5 +1,6 @@
 import type { LinearIssue, LinearTeam, LinearProject, OutputFormat, AuthProfile } from "./types.js";
 export declare function getPriorityLabel(priority: number): string;
+export declare function stripAnsi(str: string): string;
 /**
  * Generate standard Linear git branch name slug (e.g., "imamuzzaki/ima-49-investigate-listing-issue")
  */

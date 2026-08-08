@@ -227,6 +227,14 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
+            checkExisting: {
+                type: string;
+                description: string;
+            };
+            idempotent: {
+                type: string;
+                description: string;
+            };
             issues: {
                 type: string;
                 items: {
@@ -372,6 +380,14 @@ export declare const bulkCreateIssuesToolSchema: {
                 description: string;
             };
             defaultTeamKey: {
+                type: string;
+                description: string;
+            };
+            checkExisting: {
+                type: string;
+                description: string;
+            };
+            idempotent: {
                 type: string;
                 description: string;
             };

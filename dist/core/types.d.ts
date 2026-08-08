@@ -86,6 +86,7 @@ export interface CreateIssueParams {
     parentId?: string;
     blockedBy?: string[] | string;
     blocks?: string[] | string;
+    checkExisting?: boolean;
 }
 export interface UpdateIssueParams {
     title?: string;

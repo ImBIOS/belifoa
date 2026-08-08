@@ -85,7 +85,7 @@ export declare class BelifoaClient {
     /**
      * Bulk create issues
      */
-    createBulkIssues(issues: CreateIssueParams[], defaultTeam?: string): Promise<{
+    createBulkIssues(issues: CreateIssueParams[], defaultTeam?: string, checkExisting?: boolean): Promise<{
         created: LinearIssue[];
         errors: Array<{
             index: number;

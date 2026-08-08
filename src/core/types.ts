@@ -75,6 +75,7 @@ export interface CreateIssueParams {
   parentId?: string; // Parent issue ID or identifier (e.g., "ENG-100")
   blockedBy?: string[] | string; // Issue ID(s) or identifier(s) that block this issue
   blocks?: string[] | string; // Issue ID(s) or identifier(s) that this issue blocks
+  checkExisting?: boolean; // If true, check if issue with same title exists in team before creating
 }
 
 export interface UpdateIssueParams {

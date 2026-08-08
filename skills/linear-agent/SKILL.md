@@ -14,7 +14,8 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 - **MCP Tool Namespacing for Monorepos**: Prefixes MCP tools with workspace profile name (e.g. `belifoa_myrehat_create_issue` or `belifoa_myrehat_list_issues`) to prevent tool collisions when multiple MCP servers run concurrently.
 - **Explicit Active Profile Banner**: Prints a 1-line context header (`[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)`) on CLI & MCP outputs for immediate visual confirmation.
 - **Standardized CLI Flags**: Consistent `-p/--profile`, `-w/--workspace`, and `-t/--team` across all CLI subcommands (`list`, `issue list`, `my-issues`, `search`, `create`, `update`, `close`).
-- **Git Branch Helper**: Generate and checkout standard Linear branch names (`belifoa branch ENG-123 --checkout`).
+- **Git Branch Helper**: Generate and checkout standard Linear branch names (`belifoa branch ENG-123 -b` or `--checkout`).
+- **Idempotency & Duplicate Prevention**: Avoid duplicate issues with `--check-existing` / `--idempotent` in creation & import commands or `checkExisting` parameter in MCP tools.
 - **Hierarchy & Relations**: Support for `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tools.
 - **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create", issues: [...] })`.
 - **Self-Correcting LLM Errors**: Structured JSON errors returning valid `availableTeams`, `availableStates`, `availableUsers`, and `availableProfiles` on invalid inputs so agents self-correct in 1 turn.
@@ -35,10 +36,10 @@ bun x github:ImBIOS/belifoa#canary search "login bug" --team ENG
 bun x github:ImBIOS/belifoa#canary issue ENG-123
 
 # Get git branch name slug or checkout branch
-bun x github:ImBIOS/belifoa#canary branch ENG-123 --checkout
+bun x github:ImBIOS/belifoa#canary branch ENG-123 -b
 
-# Create an issue (with hierarchy and relations)
-bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1 --parent ENG-100 --blocked-by ENG-99
+# Create an issue (with hierarchy, relations, and duplicate prevention)
+bun x github:ImBIOS/belifoa#canary create --team ENG --title "Fix race condition in auth" --priority 1 --parent ENG-100 --blocked-by ENG-99 --check-existing
 
 # Update an existing issue
 bun x github:ImBIOS/belifoa#canary update ENG-123 --state "In Progress" --assignee me -c "Started working on fix"

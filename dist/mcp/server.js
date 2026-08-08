@@ -13065,7 +13065,7 @@ var init_stdio2 = __esm(() => {
 });
 
 // src/core/config.ts
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
@@ -13105,7 +13105,9 @@ function saveConfig(config2) {
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true });
   }
-  writeFileSync(configFile, JSON.stringify(config2, null, 2), "utf-8");
+  const tmpFile = `${configFile}.tmp.${process.pid}.${Math.random().toString(36).substring(2, 8)}`;
+  writeFileSync(tmpFile, JSON.stringify(config2, null, 2), "utf-8");
+  renameSync(tmpFile, configFile);
 }
 function checkDirectoryForConfig(dir) {
   const jsonFile = join(dir, ".belifoarc.json");
@@ -13316,17 +13318,37 @@ function getActiveProfile(overrideProfileName) {
     if (assigneeVal) {
       active.defaultAssignee = assigneeVal;
     }
+    if (active.teams && active.teams.length > 0 && active.defaultTeam) {
+      const valid = active.teams.some((t) => t.key.toUpperCase() === active.defaultTeam?.toUpperCase());
+      if (!valid) {
+        active.defaultTeam = active.teams[0].key.toUpperCase();
+      }
+    }
   }
   return active;
 }
 function addProfile(name, apiKey, organization, defaultTeam, teams) {
   const config2 = loadConfig();
+  const resolvedTeams = teams || config2.profiles[name]?.teams;
+  let resolvedDefaultTeam = defaultTeam || config2.profiles[name]?.defaultTeam;
+  if (resolvedTeams && resolvedTeams.length > 0) {
+    if (resolvedDefaultTeam) {
+      const match = resolvedTeams.find((t) => t.key.toUpperCase() === resolvedDefaultTeam?.toUpperCase());
+      if (match) {
+        resolvedDefaultTeam = match.key.toUpperCase();
+      } else {
+        resolvedDefaultTeam = resolvedTeams[0].key.toUpperCase();
+      }
+    } else {
+      resolvedDefaultTeam = resolvedTeams[0].key.toUpperCase();
+    }
+  }
   const profile = {
     name,
     apiKey,
     organization,
-    teams: teams || config2.profiles[name]?.teams,
-    defaultTeam: defaultTeam || config2.profiles[name]?.defaultTeam,
+    teams: resolvedTeams,
+    defaultTeam: resolvedDefaultTeam,
     createdAt: new Date().toISOString()
   };
   config2.profiles[name] = profile;
@@ -13347,13 +13369,22 @@ function switchProfile(name) {
 }
 function switchDefaultTeam(teamKey, profileName) {
   const config2 = loadConfig();
-  const targetName = profileName || config2.activeProfile || "default";
+  const activeProf = getActiveProfile(profileName);
+  const targetName = profileName || activeProf?.name || config2.activeProfile || "default";
   if (!config2.profiles[targetName]) {
     throw new Error(`Auth profile '${targetName}' not found.`);
   }
-  config2.profiles[targetName].defaultTeam = teamKey.toUpperCase();
+  const targetProfile = config2.profiles[targetName];
+  const upperKey = teamKey.toUpperCase();
+  if (targetProfile.teams && targetProfile.teams.length > 0) {
+    const isAccessible = targetProfile.teams.some((t) => t.key.toUpperCase() === upperKey);
+    if (!isAccessible) {
+      throw new Error(`Team '${upperKey}' is not accessible in profile '${targetName}'. Accessible teams: ${targetProfile.teams.map((t) => t.key).join(", ")}`);
+    }
+  }
+  targetProfile.defaultTeam = upperKey;
   saveConfig(config2);
-  return config2.profiles[targetName];
+  return targetProfile;
 }
 function removeProfile(name) {
   const config2 = loadConfig();
@@ -13379,6 +13410,20 @@ var init_config = () => {};
 // src/core/formatters.ts
 function getPriorityLabel(priority) {
   return PRIORITY_LABELS[priority] || "None";
+}
+function stripAnsi(str) {
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+}
+function shouldStripAnsi() {
+  if (typeof process === "undefined" || !process.stdout)
+    return false;
+  return !process.stdout.isTTY && process.env.FORCE_COLOR !== "1";
+}
+function maybeStripAnsi(output, format) {
+  if (format === "cli_table" && shouldStripAnsi()) {
+    return stripAnsi(output);
+  }
+  return output;
 }
 function pad(str, length) {
   return (str + " ".repeat(length)).substring(0, length);
@@ -13522,8 +13567,8 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 function formatIssueDetail(issue2, format = "cli_table", activeProfile) {
   if (format === "raw_json") {
@@ -13647,8 +13692,8 @@ ${content2}` : content2;
   }
   const content = lines.join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 function formatTeams(teams, format = "cli_table", activeProfile) {
   if (format === "raw_json")
@@ -13681,8 +13726,8 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 function formatProjects(projects, format = "cli_table", activeProfile) {
   if (format === "raw_json")
@@ -13723,8 +13768,8 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 function formatProfiles(profiles, format = "cli_table", activeProfile) {
   if (format === "raw_json")
@@ -13792,8 +13837,8 @@ ${content2}` : content2;
     ""
   ].join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 function formatLabels(labels, format = "cli_table", activeProfile) {
   if (format === "raw_json")
@@ -13825,8 +13870,8 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
-  return banner ? `${banner}
-${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}
+${content}` : content, format);
 }
 var PRIORITY_LABELS;
 var init_formatters = __esm(() => {
@@ -14073,37 +14118,62 @@ class BelifoaClient {
   }
   async searchIssues(queryStr, options = {}) {
     const limit = options.limit || 15;
+    const cleanQuery = queryStr ? queryStr.trim() : "";
+    const issueFields = `
+      id
+      identifier
+      title
+      description
+      priority
+      estimate
+      dueDate
+      url
+      createdAt
+      updatedAt
+      state { name }
+      team { key }
+      assignee { name email }
+      project { name }
+      labels { nodes { name } }
+      parent { id identifier title }
+      children { nodes { id identifier title priority state { name } } }
+      relations { nodes { id type relatedIssue { id identifier title } } }
+    `;
+    if (!cleanQuery) {
+      const teamFilter = options.teamKey ? { team: { key: { eq: options.teamKey.toUpperCase() } } } : undefined;
+      const query2 = `
+        query ListIssues($filter: IssueFilter, $first: Int) {
+          issues(filter: $filter, first: $first) {
+            nodes {
+              ${issueFields}
+            }
+          }
+        }
+      `;
+      const data2 = await this.graphql(query2, {
+        filter: teamFilter,
+        first: limit
+      });
+      let nodes2 = data2.issues?.nodes || [];
+      if (options.teamKey) {
+        nodes2 = nodes2.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
+      }
+      return nodes2.map(cleanRawIssue);
+    }
     const query = `
       query SearchIssues($term: String!, $first: Int) {
-        issueSearch(query: $term, first: $first) {
+        searchIssues(term: $term, first: $first) {
           nodes {
-            id
-            identifier
-            title
-            description
-            priority
-            estimate
-            dueDate
-            url
-            createdAt
-            updatedAt
-            state { name }
-            team { key }
-            assignee { name email }
-            project { name }
-            labels { nodes { name } }
-            parent { id identifier title }
-            children { nodes { id identifier title priority state { name } } }
-            relations { nodes { id type relatedIssue { id identifier title } } }
+            ${issueFields}
           }
         }
       }
     `;
     const data = await this.graphql(query, {
-      term: queryStr,
+      term: cleanQuery,
       first: limit
     });
-    let nodes = data.issueSearch.nodes || [];
+    let nodes = data.searchIssues?.nodes || [];
     if (options.teamKey) {
       nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
     }
@@ -14183,6 +14253,16 @@ class BelifoaClient {
     return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
   }
   async createIssue(params) {
+    if (params.checkExisting) {
+      const existing = await this.searchIssues(params.title, {
+        teamKey: params.teamIdOrKey,
+        limit: 10
+      }).catch(() => []);
+      const match2 = existing.find((i) => i.title.trim().toLowerCase() === params.title.trim().toLowerCase());
+      if (match2) {
+        return match2;
+      }
+    }
     let teamId = params.teamIdOrKey;
     const teams = await this.getTeams();
     const match = teams.find((t) => t.key.toUpperCase() === params.teamIdOrKey.toUpperCase() || t.id === params.teamIdOrKey);
@@ -14355,7 +14435,7 @@ class BelifoaClient {
     }
     return updatedIssue;
   }
-  async createBulkIssues(issues, defaultTeam) {
+  async createBulkIssues(issues, defaultTeam, checkExisting) {
     const created = [];
     const errors3 = [];
     for (let i = 0;i < issues.length; i++) {
@@ -14367,7 +14447,8 @@ class BelifoaClient {
         }
         const issue2 = await this.createIssue({
           ...item,
-          teamIdOrKey: teamKey
+          teamIdOrKey: teamKey,
+          checkExisting: item.checkExisting ?? checkExisting
         });
         created.push(issue2);
       } catch (err) {
@@ -14471,6 +14552,8 @@ function getMcpToolSchemas(overrideProfileName) {
           labels: { type: "array", items: { type: "string" } },
           state: { type: "string", description: "Initial workflow state" },
           parentId: { type: "string", description: "Parent issue ID" },
+          checkExisting: { type: "boolean", description: "If true, check if issue with same title exists before creating" },
+          idempotent: { type: "boolean", description: "If true, check if issue with same title exists before creating (alias)" },
           profileName: { type: "string", description: "Target workspace profile name" },
           format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" }
         },
@@ -14656,6 +14739,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
       case "manage_issue": {
         if (args.action === "bulk_create") {
           const defaultTeam = args.teamKey || active?.defaultTeam;
+          const checkExisting = Boolean(args.checkExisting || args.idempotent);
           const items = (args.issues || []).map((i) => ({
             teamIdOrKey: i.team || defaultTeam,
             title: i.title,
@@ -14671,7 +14755,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             blockedBy: i.blockedBy,
             blocks: i.blocks
           }));
-          const result = await targetClient.createBulkIssues(items, defaultTeam);
+          const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
           const parts = [];
           if (result.created.length > 0) {
             parts.push(`\u2705 Created ${result.created.length} issue(s):
@@ -14705,7 +14789,8 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
             state: args.state,
             parentId: args.parentId,
             blockedBy: args.blockedBy,
-            blocks: args.blocks
+            blocks: args.blocks,
+            checkExisting: Boolean(args.checkExisting || args.idempotent)
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -14770,6 +14855,7 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
       }
       case "bulk_create_issues": {
         const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
+        const checkExisting = Boolean(args.checkExisting || args.idempotent);
         const items = (args.issues || []).map((i) => ({
           teamIdOrKey: i.team || defaultTeam,
           title: i.title,
@@ -14785,7 +14871,7 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
           blockedBy: i.blockedBy,
           blocks: i.blocks
         }));
-        const result = await targetClient.createBulkIssues(items, defaultTeam);
+        const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
         const parts = [];
         if (result.created.length > 0) {
           parts.push(`\u2705 Created ${result.created.length} issue(s):
@@ -14966,6 +15052,8 @@ var init_tools = __esm(() => {
           description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
         },
         commentBody: { type: "string", description: "Comment body text" },
+        checkExisting: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating" },
+        idempotent: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating (alias)" },
         issues: {
           type: "array",
           items: {
@@ -15028,6 +15116,8 @@ var init_tools = __esm(() => {
           description: "List of issue objects to create"
         },
         defaultTeamKey: { type: "string", description: "Default team key if omitted in individual issue items" },
+        checkExisting: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team" },
+        idempotent: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team (alias)" },
         profileName: { type: "string", description: "Target workspace profile name" },
         format: {
           type: "string",

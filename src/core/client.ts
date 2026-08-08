@@ -322,39 +322,70 @@ export class BelifoaClient {
     options: { teamKey?: string; assigneeId?: string; limit?: number } = {}
   ): Promise<LinearIssue[]> {
     const limit = options.limit || 15;
+    const cleanQuery = queryStr ? queryStr.trim() : "";
+
+    const issueFields = `
+      id
+      identifier
+      title
+      description
+      priority
+      estimate
+      dueDate
+      url
+      createdAt
+      updatedAt
+      state { name }
+      team { key }
+      assignee { name email }
+      project { name }
+      labels { nodes { name } }
+      parent { id identifier title }
+      children { nodes { id identifier title priority state { name } } }
+      relations { nodes { id type relatedIssue { id identifier title } } }
+    `;
+
+    if (!cleanQuery) {
+      const teamFilter = options.teamKey ? { team: { key: { eq: options.teamKey.toUpperCase() } } } : undefined;
+      const query = `
+        query ListIssues($filter: IssueFilter, $first: Int) {
+          issues(filter: $filter, first: $first) {
+            nodes {
+              ${issueFields}
+            }
+          }
+        }
+      `;
+
+      const data = await this.graphql<{ issues: { nodes: any[] } }>(query, {
+        filter: teamFilter,
+        first: limit,
+      });
+
+      let nodes = data.issues?.nodes || [];
+      if (options.teamKey) {
+        nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
+      }
+
+      return nodes.map(cleanRawIssue);
+    }
+
     const query = `
       query SearchIssues($term: String!, $first: Int) {
-        issueSearch(query: $term, first: $first) {
+        searchIssues(term: $term, first: $first) {
           nodes {
-            id
-            identifier
-            title
-            description
-            priority
-            estimate
-            dueDate
-            url
-            createdAt
-            updatedAt
-            state { name }
-            team { key }
-            assignee { name email }
-            project { name }
-            labels { nodes { name } }
-            parent { id identifier title }
-            children { nodes { id identifier title priority state { name } } }
-            relations { nodes { id type relatedIssue { id identifier title } } }
+            ${issueFields}
           }
         }
       }
     `;
 
-    const data = await this.graphql<{ issueSearch: { nodes: any[] } }>(query, {
-      term: queryStr,
+    const data = await this.graphql<{ searchIssues: { nodes: any[] } }>(query, {
+      term: cleanQuery,
       first: limit,
     });
 
-    let nodes = data.issueSearch.nodes || [];
+    let nodes = data.searchIssues?.nodes || [];
     if (options.teamKey) {
       nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
     }
@@ -450,6 +481,20 @@ export class BelifoaClient {
    * Create an issue
    */
   async createIssue(params: CreateIssueParams): Promise<LinearIssue> {
+    if (params.checkExisting) {
+      const existing = await this.searchIssues(params.title, {
+        teamKey: params.teamIdOrKey,
+        limit: 10,
+      }).catch(() => []);
+
+      const match = existing.find(
+        (i) => i.title.trim().toLowerCase() === params.title.trim().toLowerCase()
+      );
+      if (match) {
+        return match;
+      }
+    }
+
     let teamId = params.teamIdOrKey;
     const teams = await this.getTeams();
     const match = teams.find(
@@ -651,7 +696,8 @@ export class BelifoaClient {
    */
   async createBulkIssues(
     issues: CreateIssueParams[],
-    defaultTeam?: string
+    defaultTeam?: string,
+    checkExisting?: boolean
   ): Promise<{ created: LinearIssue[]; errors: Array<{ index: number; title: string; error: string }> }> {
     const created: LinearIssue[] = [];
     const errors: Array<{ index: number; title: string; error: string }> = [];
@@ -667,6 +713,7 @@ export class BelifoaClient {
         const issue = await this.createIssue({
           ...item,
           teamIdOrKey: teamKey,
+          checkExisting: item.checkExisting ?? checkExisting,
         });
         created.push(issue);
       } catch (err: any) {

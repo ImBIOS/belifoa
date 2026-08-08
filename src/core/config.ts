@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { execSync } from "node:child_process";
@@ -50,7 +50,9 @@ export function saveConfig(config: BelifoaConfig): void {
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true });
   }
-  writeFileSync(configFile, JSON.stringify(config, null, 2), "utf-8");
+  const tmpFile = `${configFile}.tmp.${process.pid}.${Math.random().toString(36).substring(2, 8)}`;
+  writeFileSync(tmpFile, JSON.stringify(config, null, 2), "utf-8");
+  renameSync(tmpFile, configFile);
 }
 
 function checkDirectoryForConfig(dir: string): { profile?: string; team?: string; apiKey?: string; defaultAssignee?: string } | null {
@@ -329,6 +331,13 @@ export function getActiveProfile(overrideProfileName?: string): AuthProfile | nu
     if (assigneeVal) {
       active.defaultAssignee = assigneeVal;
     }
+
+    if (active.teams && active.teams.length > 0 && active.defaultTeam) {
+      const valid = active.teams.some((t) => t.key.toUpperCase() === active.defaultTeam?.toUpperCase());
+      if (!valid) {
+        active.defaultTeam = active.teams[0].key.toUpperCase();
+      }
+    }
   }
 
   return active;
@@ -342,12 +351,28 @@ export function addProfile(
   teams?: Array<{ key: string; name: string }>
 ): AuthProfile {
   const config = loadConfig();
+  const resolvedTeams = teams || config.profiles[name]?.teams;
+  let resolvedDefaultTeam = defaultTeam || config.profiles[name]?.defaultTeam;
+
+  if (resolvedTeams && resolvedTeams.length > 0) {
+    if (resolvedDefaultTeam) {
+      const match = resolvedTeams.find((t) => t.key.toUpperCase() === resolvedDefaultTeam?.toUpperCase());
+      if (match) {
+        resolvedDefaultTeam = match.key.toUpperCase();
+      } else {
+        resolvedDefaultTeam = resolvedTeams[0].key.toUpperCase();
+      }
+    } else {
+      resolvedDefaultTeam = resolvedTeams[0].key.toUpperCase();
+    }
+  }
+
   const profile: AuthProfile = {
     name,
     apiKey,
     organization,
-    teams: teams || config.profiles[name]?.teams,
-    defaultTeam: defaultTeam || config.profiles[name]?.defaultTeam,
+    teams: resolvedTeams,
+    defaultTeam: resolvedDefaultTeam,
     createdAt: new Date().toISOString(),
   };
 
@@ -373,15 +398,28 @@ export function switchProfile(name: string): AuthProfile {
 
 export function switchDefaultTeam(teamKey: string, profileName?: string): AuthProfile {
   const config = loadConfig();
-  const targetName = profileName || config.activeProfile || "default";
+  const activeProf = getActiveProfile(profileName);
+  const targetName = profileName || activeProf?.name || config.activeProfile || "default";
 
   if (!config.profiles[targetName]) {
     throw new Error(`Auth profile '${targetName}' not found.`);
   }
 
-  config.profiles[targetName].defaultTeam = teamKey.toUpperCase();
+  const targetProfile = config.profiles[targetName];
+  const upperKey = teamKey.toUpperCase();
+
+  if (targetProfile.teams && targetProfile.teams.length > 0) {
+    const isAccessible = targetProfile.teams.some((t) => t.key.toUpperCase() === upperKey);
+    if (!isAccessible) {
+      throw new Error(
+        `Team '${upperKey}' is not accessible in profile '${targetName}'. Accessible teams: ${targetProfile.teams.map((t) => t.key).join(", ")}`
+      );
+    }
+  }
+
+  targetProfile.defaultTeam = upperKey;
   saveConfig(config);
-  return config.profiles[targetName];
+  return targetProfile;
 }
 
 export function removeProfile(name: string): void {

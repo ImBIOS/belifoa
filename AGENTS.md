@@ -9,7 +9,7 @@ This document contains mandatory guidelines, architectural principles, and workf
 ### 1. Atomic Changes & Always Push
 - **Atomic Commits**: Make small, focused, single-purpose code changes per commit. Never mix unrelated refactors, features, or formatting changes in one commit.
 - **Always Commit & Push**: After making an atomic change and verifying tests/build (`pnpm test && pnpm run build`), immediately commit with a clear conventional commit message (`feat: ...`, `fix: ...`, `docs: ...`, `style: ...`) and push to GitHub (`git push origin canary`).
-- **Git Tags for Release**: When releasing feature updates or bug fixes, bump version in `package.json` & `src/cli/index.ts`, rebuild `dist/`, create a lightweight git tag (e.g. `git tag -a v0.2.3 -m "release" && git push origin v0.2.3`), and push tags. This busts GitHub tarball CDN caches for `bun x` execution.
+- **Git Tags & GitHub Releases**: When releasing feature updates or bug fixes, bump version in `package.json` & `src/cli/index.ts`, rebuild `dist/`, create a lightweight git tag (e.g. `git tag -a v0.5.1 -m "release" && git push origin v0.5.1`), push tags (`git push origin --tags`), AND create a GitHub Release using `gh release create v0.5.1 --title "v0.5.1" --notes "..."` so that releases exist on GitHub and bust tarball CDN caches for `bun x` execution.
 - **Keep Agent Skills & Documentation Up-To-Date**: Whenever adding or modifying CLI commands, MCP tools, flags, or configuration behavior, ALWAYS update `skills/linear-agent/SKILL.md` (and `.agents/skills/linear-agent/SKILL.md` if present) and `README.md` so that LLM agents reading the skill instructions always have accurate and complete capability context.
 
 ### 2. Runtime & Tooling

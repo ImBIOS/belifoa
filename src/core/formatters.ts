@@ -13,6 +13,22 @@ export function getPriorityLabel(priority: number): string {
   return PRIORITY_LABELS[priority] || "None";
 }
 
+export function stripAnsi(str: string): string {
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+function shouldStripAnsi(): boolean {
+  if (typeof process === "undefined" || !process.stdout) return false;
+  return !process.stdout.isTTY && process.env.FORCE_COLOR !== "1";
+}
+
+function maybeStripAnsi(output: string, format: OutputFormat): string {
+  if (format === "cli_table" && shouldStripAnsi()) {
+    return stripAnsi(output);
+  }
+  return output;
+}
+
 function pad(str: string, length: number): string {
   return (str + " ".repeat(length)).substring(0, length);
 }
@@ -219,7 +235,7 @@ export function formatIssueList(
     ...body,
   ].join("\n");
 
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
 /**
@@ -349,7 +365,7 @@ export function formatIssueDetail(
   }
 
   const content = lines.join("\n");
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
 /**
@@ -393,7 +409,7 @@ export function formatTeams(
     ...body,
   ].join("\n");
 
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
 /**
@@ -449,7 +465,7 @@ export function formatProjects(
     ...body,
   ].join("\n");
 
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
 /**
@@ -534,7 +550,7 @@ export function formatProfiles(
     "",
   ].join("\n");
 
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
 /**
@@ -577,6 +593,6 @@ export function formatLabels(
     ...body,
   ].join("\n");
 
-  return banner ? `${banner}\n${content}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
 }
 
