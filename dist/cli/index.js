@@ -17289,7 +17289,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.1");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.2");
 program2.command("init [profile]").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Default team key for this project").option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')").action((profileArg, options) => {
   try {
     const profileName = profileArg || options.profile || options.workspace;
