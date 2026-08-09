@@ -9,7 +9,14 @@ This document contains mandatory guidelines, architectural principles, and workf
 ### 1. Atomic Changes & Always Push
 - **Atomic Commits**: Make small, focused, single-purpose code changes per commit. Never mix unrelated refactors, features, or formatting changes in one commit.
 - **Always Commit & Push**: After making an atomic change and verifying tests/build (`pnpm test && pnpm run build`), immediately commit with a clear conventional commit message (`feat: ...`, `fix: ...`, `docs: ...`, `style: ...`) and push to GitHub (`git push origin canary`).
-- **Git Tags & GitHub Releases**: When releasing feature updates or bug fixes, bump version in `package.json` & `src/cli/index.ts`, rebuild `dist/`, create a lightweight git tag (e.g. `git tag -a v0.5.1 -m "release" && git push origin v0.5.1`), push tags (`git push origin --tags`), AND create a GitHub Release using `gh release create v0.5.1 --title "v0.5.1" --notes "..."` so that releases exist on GitHub and bust tarball CDN caches for `bun x` execution.
+- **RELEASE EVERY SHIPPED CHANGE — MANDATORY**: Every bug fix or feature merged to `canary` MUST be released the same session, no exceptions. There is no "not releasing for a small fix" — `bun x github:ImBIOS/belifoa#canary` pulls the latest tag, so an unreleased fix is an unreachable fix. Complete release checklist in order:
+  1. **Bump version** (patch for fixes, minor for features) in `package.json` AND `src/cli/index.ts` (`.version("x.y.z")` — both must match)
+  2. **Verify**: `pnpm test && pnpm run build` (rebuilds `dist/`)
+  3. Commit as `chore(release): bump version to x.y.z` and `git push origin canary`
+  4. **Create annotated tag**: `git tag -a vx.y.z -m "release vx.y.z: <summary>" && git push origin vx.y.z`
+  5. **Create GitHub Release**: `gh release create vx.y.z --title "vx.y.z" --notes "..."` (group changes under `## Features` / `## Fixes` / `## Tests` headings)
+  6. **Never** skip the GitHub Release — a tag without a release means the tarball CDN cache for `bun x` is never busted and users keep getting the old build. Any release note placeholder is fine; only the release itself is non-negotiable.
+- **Git Tags & GitHub Releases**: The rule above supersedes any doubt: version bump → tag → push → GitHub Release for every fix/feature.
 - **Keep Agent Skills & Documentation Up-To-Date**: Whenever adding or modifying CLI commands, MCP tools, flags, or configuration behavior, ALWAYS update `skills/linear-agent/SKILL.md` (and `.agents/skills/linear-agent/SKILL.md` if present) and `README.md` so that LLM agents reading the skill instructions always have accurate and complete capability context.
 
 ### 2. Runtime & Tooling
