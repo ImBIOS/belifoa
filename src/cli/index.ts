@@ -364,7 +364,7 @@ program
   .description("Get git branch name slug for a Linear issue (e.g. ENG-123)")
   .option("-p, --profile <profile>", "Target workspace profile")
   .option("-w, --workspace <profile>", "Target workspace profile (alias)")
-  .option("-c, -b, --checkout", "Execute git checkout -b with the generated branch name")
+  .option("-c, --checkout", "Execute git checkout -b with the generated branch name")
   .action(async (id: string, options) => {
     try {
       const profileName = options.profile || options.workspace;

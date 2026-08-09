@@ -17500,7 +17500,7 @@ program2.command("issue [id]").description("Get details for a specific issue (e.
     process.exit(1);
   }
 });
-program2.command("branch <id>").description("Get git branch name slug for a Linear issue (e.g. ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-c, -b, --checkout", "Execute git checkout -b with the generated branch name").action(async (id, options) => {
+program2.command("branch <id>").description("Get git branch name slug for a Linear issue (e.g. ENG-123)").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-c, --checkout", "Execute git checkout -b with the generated branch name").action(async (id, options) => {
   try {
     const profileName = options.profile || options.workspace;
     const client = new BelifoaClient(undefined, profileName);
