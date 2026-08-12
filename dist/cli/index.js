@@ -15079,7 +15079,7 @@ var package_default;
 var init_package = __esm(() => {
   package_default = {
     name: "belifoa",
-    version: "0.5.3",
+    version: "0.5.4",
     description: "\u26A1 High-performance, compact Linear client & MCP server for AI agents. Reduces prompt context payload by 70\u201380% with persistent auth, CLI, skills & git hooks.",
     main: "./dist/index.js",
     module: "./dist/index.js",
@@ -17246,7 +17246,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.3");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.4");
 program2.command("init [profile]").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Default team key for this project").option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')").action((profileArg, options) => {
   try {
     const profileName = profileArg || options.profile || options.workspace;

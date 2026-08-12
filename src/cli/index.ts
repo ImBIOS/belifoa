@@ -30,7 +30,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.5.3");
+  .version("0.5.4");
 
 // Init command to create project-local config
 program
