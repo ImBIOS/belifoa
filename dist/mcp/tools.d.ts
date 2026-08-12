@@ -12,20 +12,6 @@ export declare const authStatusToolSchema: {
         };
     };
 };
-export declare const authListToolSchema: {
-    name: string;
-    description: string;
-    inputSchema: {
-        type: string;
-        properties: {
-            format: {
-                type: string;
-                enum: string[];
-                default: string;
-            };
-        };
-    };
-};
 export declare const authSwitchToolSchema: {
     name: string;
     description: string;
@@ -188,6 +174,7 @@ export declare const manageIssueToolSchema: {
             };
             estimate: {
                 type: string;
+                enum: number[];
                 description: string;
             };
             dueDate: {
@@ -231,83 +218,6 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
-            idempotent: {
-                type: string;
-                description: string;
-            };
-            issues: {
-                type: string;
-                items: {
-                    type: string;
-                    properties: {
-                        team: {
-                            type: string;
-                        };
-                        title: {
-                            type: string;
-                        };
-                        description: {
-                            type: string;
-                        };
-                        priority: {
-                            type: string;
-                        };
-                        assignee: {
-                            type: string;
-                        };
-                        project: {
-                            type: string;
-                        };
-                        estimate: {
-                            type: string;
-                        };
-                        dueDate: {
-                            type: string;
-                        };
-                        labels: {
-                            type: string;
-                            items: {
-                                type: string;
-                            };
-                        };
-                        state: {
-                            type: string;
-                        };
-                        parentId: {
-                            type: string;
-                        };
-                        blockedBy: {
-                            type: string;
-                            items: {
-                                type: string;
-                            };
-                        };
-                        blocks: {
-                            type: string;
-                            items: {
-                                type: string;
-                            };
-                        };
-                    };
-                    required: string[];
-                };
-                description: string;
-            };
-            format: {
-                type: string;
-                enum: string[];
-                default: string;
-            };
-        };
-        required: string[];
-    };
-};
-export declare const bulkCreateIssuesToolSchema: {
-    name: string;
-    description: string;
-    inputSchema: {
-        type: string;
-        properties: {
             issues: {
                 type: string;
                 items: {
@@ -339,6 +249,7 @@ export declare const bulkCreateIssuesToolSchema: {
                         };
                         estimate: {
                             type: string;
+                            enum: number[];
                             description: string;
                         };
                         dueDate: {
@@ -379,22 +290,6 @@ export declare const bulkCreateIssuesToolSchema: {
                 };
                 description: string;
             };
-            defaultTeamKey: {
-                type: string;
-                description: string;
-            };
-            checkExisting: {
-                type: string;
-                description: string;
-            };
-            idempotent: {
-                type: string;
-                description: string;
-            };
-            profileName: {
-                type: string;
-                description: string;
-            };
             format: {
                 type: string;
                 enum: string[];
@@ -404,7 +299,7 @@ export declare const bulkCreateIssuesToolSchema: {
         required: string[];
     };
 };
-export declare const getTeamsAndProjectsToolSchema: {
+export declare const getWorkspaceToolSchema: {
     name: string;
     description: string;
     inputSchema: {
@@ -422,25 +317,7 @@ export declare const getTeamsAndProjectsToolSchema: {
         };
     };
 };
-export declare const getLabelsToolSchema: {
-    name: string;
-    description: string;
-    inputSchema: {
-        type: string;
-        properties: {
-            profileName: {
-                type: string;
-                description: string;
-            };
-            format: {
-                type: string;
-                enum: string[];
-                default: string;
-            };
-        };
-    };
-};
-export declare function getMcpToolSchemas(overrideProfileName?: string): Array<{
+export declare function getMcpToolSchemas(): Array<{
     name: string;
     description: string;
     inputSchema: any;

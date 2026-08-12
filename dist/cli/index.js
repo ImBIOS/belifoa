@@ -14522,61 +14522,16 @@ var init_client = __esm(() => {
 });
 
 // src/mcp/tools.ts
-function getMcpToolSchemas(overrideProfileName) {
-  const active = getActiveProfile(overrideProfileName);
-  const profileName = active?.name || overrideProfileName || "default";
-  const prefix = `belifoa_${profileName}_`;
+function getMcpToolSchemas() {
   return [
-    { ...authStatusToolSchema, name: `${prefix}auth_status` },
-    { ...authListToolSchema, name: `${prefix}auth_list` },
-    { ...authSwitchToolSchema, name: `${prefix}auth_switch` },
-    { ...setApiKeyToolSchema, name: `${prefix}set_api_key` },
-    { ...getIssueToolSchema, name: `${prefix}get_issue` },
-    { ...searchIssuesToolSchema, name: `${prefix}search_issues` },
-    { ...getMyIssuesToolSchema, name: `${prefix}get_my_issues` },
-    { ...manageIssueToolSchema, name: `${prefix}manage_issue` },
-    {
-      name: `${prefix}create_issue`,
-      description: "Create a new Linear issue in the workspace.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          teamKey: { type: "string", description: "Team key (e.g. ENG). Uses default team if omitted." },
-          title: { type: "string", description: "Issue title" },
-          description: { type: "string", description: "Issue description" },
-          priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
-          assignee: { type: "string", description: "Assignee user ID, email, or name" },
-          project: { type: "string", description: "Project name or ID" },
-          estimate: { type: "number", description: "Story points estimate" },
-          dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
-          labels: { type: "array", items: { type: "string" } },
-          state: { type: "string", description: "Initial workflow state" },
-          parentId: { type: "string", description: "Parent issue ID" },
-          checkExisting: { type: "boolean", description: "If true, check if issue with same title exists before creating" },
-          idempotent: { type: "boolean", description: "If true, check if issue with same title exists before creating (alias)" },
-          profileName: { type: "string", description: "Target workspace profile name" },
-          format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" }
-        },
-        required: ["title"]
-      }
-    },
-    {
-      name: `${prefix}list_issues`,
-      description: "List or search issues for a team or query in the workspace.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search query or keyword" },
-          teamKey: { type: "string", description: "Team key filter (e.g. 'ENG')" },
-          limit: { type: "number", default: 15 },
-          profileName: { type: "string", description: "Target workspace profile name" },
-          format: { type: "string", enum: ["markdown", "compact_json", "raw_json"], default: "markdown" }
-        }
-      }
-    },
-    { ...bulkCreateIssuesToolSchema, name: `${prefix}bulk_create_issues` },
-    { ...getTeamsAndProjectsToolSchema, name: `${prefix}get_teams_and_projects` },
-    { ...getLabelsToolSchema, name: `${prefix}get_labels` }
+    authStatusToolSchema,
+    authSwitchToolSchema,
+    setApiKeyToolSchema,
+    getIssueToolSchema,
+    searchIssuesToolSchema,
+    getMyIssuesToolSchema,
+    manageIssueToolSchema,
+    getWorkspaceToolSchema
   ];
 }
 function getAuthGuidanceMessage() {
@@ -14592,8 +14547,8 @@ function getAuthGuidanceMessage() {
     `_Current Status_: ${profileListStr}`,
     "",
     "**Options for User**:",
-    "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `linear_set_api_key`.",
-    "2. **Switch Profile**: If you already saved a profile, run `linear_auth_switch({ profileName: 'playzuzu' })`.",
+    "1. **Provide Key in Chat**: Paste your Personal API Key (starts with `lin_api_`) here, and I will save it using `belifoa_set_api_key`.",
+    "2. **Switch Profile**: If you already saved a profile, run `belifoa_auth_switch({ profileName: 'playzuzu' })`.",
     "3. **CLI Setup**: Run `bun x github:ImBIOS/belifoa#canary auth add <profile-name> <lin_api_...>` in your terminal.",
     "",
     "_To create a Personal API Key, go to Linear Settings -> Account -> API -> Personal API keys._"
@@ -14636,10 +14591,17 @@ async function handleToolCall(name, args, client) {
   } else if (cleanName === "close_issue" || cleanName === "resolve_issue") {
     args.action = "close";
     cleanName = "manage_issue";
+  } else if (cleanName === "bulk_create_issues") {
+    args.action = "bulk_create";
+    if (args.defaultTeamKey && !args.teamKey)
+      args.teamKey = args.defaultTeamKey;
+    cleanName = "manage_issue";
   } else if (cleanName === "list_issues" || cleanName === "my_issues") {
     cleanName = args.query ? "search_issues" : "get_my_issues";
   } else if (cleanName === "issue") {
     cleanName = "get_issue";
+  } else if (cleanName === "get_teams_and_projects" || cleanName === "get_labels") {
+    cleanName = "get_workspace";
   }
   try {
     switch (cleanName) {
@@ -14647,6 +14609,8 @@ async function handleToolCall(name, args, client) {
         try {
           const me = await targetClient.getMe();
           const org = await targetClient.getOrganization();
+          const profiles = listProfiles();
+          const savedStr = profiles.length > 0 ? profiles.map((p) => p.profile.name + (p.isActive ? " (Active)" : "")).join(", ") : "None";
           return {
             content: [
               {
@@ -14655,7 +14619,8 @@ async function handleToolCall(name, args, client) {
                   `\u2705 **Active Profile**: \`${active?.name || "default"}\``,
                   `- **Workspace / Org**: ${org.name} (\`${org.urlKey}\`)`,
                   `- **User**: ${me.name} (${me.email || me.id})`,
-                  `- **Default Team**: ${active?.defaultTeam || "None"}`
+                  `- **Default Team**: ${active?.defaultTeam || "None"}`,
+                  `- **Saved Profiles**: ${savedStr}`
                 ].join(`
 `)
               }
@@ -14853,50 +14818,19 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
         }
         throw new Error(`Unsupported action: ${args.action}`);
       }
-      case "bulk_create_issues": {
-        const defaultTeam = args.defaultTeamKey || active?.defaultTeam;
-        const checkExisting = Boolean(args.checkExisting || args.idempotent);
-        const items = (args.issues || []).map((i) => ({
-          teamIdOrKey: i.team || defaultTeam,
-          title: i.title,
-          description: i.description,
-          priority: i.priority,
-          assignee: i.assignee || active?.defaultAssignee,
-          project: i.project,
-          estimate: i.estimate,
-          dueDate: i.dueDate,
-          labels: i.labels,
-          state: i.state,
-          parentId: i.parentId,
-          blockedBy: i.blockedBy,
-          blocks: i.blocks
-        }));
-        const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
-        const parts = [];
-        if (result.created.length > 0) {
-          parts.push(`\u2705 Created ${result.created.length} issue(s):
-
-${formatIssueList(result.created, format, active)}`);
-        }
-        if (result.errors.length > 0) {
-          parts.push(`\u26A0\uFE0F Failed to create ${result.errors.length} issue(s):
-${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).join(`
-`)}`);
-        }
-        return { content: [{ type: "text", text: parts.join(`
-
-`) }] };
-      }
-      case "get_teams_and_projects": {
+      case "get_workspace": {
         const teams = await targetClient.getTeams();
         const projects = await targetClient.getProjects();
-        const text = [formatTeams(teams, format, active), "", formatProjects(projects, format, active)].join(`
+        const labels = await targetClient.getIssueLabels();
+        const text = [
+          formatTeams(teams, format, active),
+          "",
+          formatProjects(projects, format, active),
+          "",
+          formatLabels(labels, format, active)
+        ].join(`
 `);
         return { content: [{ type: "text", text }] };
-      }
-      case "get_labels": {
-        const labels = await targetClient.getIssueLabels();
-        return { content: [{ type: "text", text: formatLabels(labels, format, active) }] };
       }
       default:
         throw new Error(`Unknown tool name: ${name}`);
@@ -14911,63 +14845,65 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
     throw err;
   }
 }
-var authStatusToolSchema, authListToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, bulkCreateIssuesToolSchema, getTeamsAndProjectsToolSchema, getLabelsToolSchema, KNOWN_BASE_ACTIONS;
+var authStatusToolSchema, authSwitchToolSchema, setApiKeyToolSchema, getIssueToolSchema, searchIssuesToolSchema, getMyIssuesToolSchema, manageIssueToolSchema, getWorkspaceToolSchema, KNOWN_BASE_ACTIONS;
 var init_tools = __esm(() => {
   init_client();
   init_config();
   init_formatters();
   authStatusToolSchema = {
-    name: "linear_auth_status",
-    description: "Check current active profile, workspace organization, and viewer info.",
+    name: "belifoa_auth_status",
+    description: "Check current active profile, all saved profiles, workspace organization, and viewer info. Pass profileName to inspect a different workspace.",
     inputSchema: {
       type: "object",
       properties: {
-        profileName: { type: "string", description: "Optional target profile/workspace for isolation" }
-      }
-    }
-  };
-  authListToolSchema = {
-    name: "linear_auth_list",
-    description: "List all saved Linear authentication profiles and workspaces.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        format: { type: "string", enum: ["markdown", "compact_json"], default: "markdown" }
+        profileName: {
+          type: "string",
+          description: "Optional target profile/workspace. Defaults to active profile."
+        }
       }
     }
   };
   authSwitchToolSchema = {
-    name: "linear_auth_switch",
+    name: "belifoa_auth_switch",
     description: "Switch active authentication profile, workspace, or default team.",
     inputSchema: {
       type: "object",
       properties: {
-        profileName: { type: "string", description: "Name of profile/workspace to activate (e.g. 'playzuzu', 'myrehat')" },
+        profileName: {
+          type: "string",
+          description: "Name of profile/workspace to activate (e.g. 'playzuzu', 'myrehat')"
+        },
         teamKey: { type: "string", description: "Optional default team key to activate (e.g. 'ENG')" }
       }
     }
   };
   setApiKeyToolSchema = {
-    name: "linear_set_api_key",
+    name: "belifoa_set_api_key",
     description: "Add or set a long-lived Linear Personal API Key for a profile/workspace.",
     inputSchema: {
       type: "object",
       properties: {
         apiKey: { type: "string", description: "Linear Personal API Key (starts with 'lin_api_')" },
-        profileName: { type: "string", description: "Optional profile/workspace name (e.g., 'playzuzu', 'myrehat'). Defaults to 'default'." },
+        profileName: {
+          type: "string",
+          description: "Optional profile/workspace name (e.g., 'playzuzu', 'myrehat'). Defaults to 'default'."
+        },
         teamKey: { type: "string", description: "Optional default team key (e.g., 'ENG')" }
       },
       required: ["apiKey"]
     }
   };
   getIssueToolSchema = {
-    name: "linear_get_issue",
+    name: "belifoa_get_issue",
     description: "Get detailed information for a Linear issue (e.g. ENG-123) with compact agent-optimized output.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "Issue identifier (e.g., 'ENG-123') or UUID" },
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+        profileName: {
+          type: "string",
+          description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -14979,13 +14915,16 @@ var init_tools = __esm(() => {
     }
   };
   searchIssuesToolSchema = {
-    name: "linear_search_issues",
+    name: "belifoa_search_issues",
     description: "Search Linear issues by keyword query, team, or status.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Search query or keyword" },
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+        profileName: {
+          type: "string",
+          description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
+        },
         teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
         limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
         format: {
@@ -14998,12 +14937,15 @@ var init_tools = __esm(() => {
     }
   };
   getMyIssuesToolSchema = {
-    name: "linear_get_my_issues",
+    name: "belifoa_get_my_issues",
     description: "Get issues assigned to the authenticated user.",
     inputSchema: {
       type: "object",
       properties: {
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+        profileName: {
+          type: "string",
+          description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
+        },
         limit: { type: "number", default: 20 },
         format: {
           type: "string",
@@ -15014,7 +14956,7 @@ var init_tools = __esm(() => {
     }
   };
   manageIssueToolSchema = {
-    name: "linear_manage_issue",
+    name: "belifoa_manage_issue",
     description: "Unified tool to create, update, comment, close, resolve, or bulk create Linear issues in a single action call.",
     inputSchema: {
       type: "object",
@@ -15024,7 +14966,10 @@ var init_tools = __esm(() => {
           enum: ["create", "update", "comment", "close", "resolve", "bulk_create"],
           description: "Action to perform"
         },
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
+        profileName: {
+          type: "string",
+          description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
+        },
         issueId: { type: "string", description: "Issue identifier for 'update', 'comment', 'close', or 'resolve' (e.g. ENG-123)" },
         teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
@@ -15032,7 +14977,7 @@ var init_tools = __esm(() => {
         priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
         assignee: { type: "string", description: "Assignee user ID, email, or name" },
         project: { type: "string", description: "Project name or ID" },
-        estimate: { type: "number", description: "Story points estimate (1, 2, 3, 5, 8)" },
+        estimate: { type: "number", enum: [1, 2, 3, 5, 8], description: "Story points estimate (1, 2, 3, 5, 8)" },
         dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
         labels: {
           type: "array",
@@ -15051,27 +14996,29 @@ var init_tools = __esm(() => {
           items: { type: "string" },
           description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
         },
-        commentBody: { type: "string", description: "Comment body text" },
-        checkExisting: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating" },
-        idempotent: { type: "boolean", description: "If true, check if an issue with the same title exists in the team before creating (alias)" },
+        commentBody: { type: "string", description: "Comment body text for 'comment', 'close', 'resolve', or 'update'" },
+        checkExisting: {
+          type: "boolean",
+          description: "If true, check if an issue with the same title exists in the team before creating"
+        },
         issues: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              team: { type: "string" },
-              title: { type: "string" },
-              description: { type: "string" },
-              priority: { type: "number" },
-              assignee: { type: "string" },
-              project: { type: "string" },
-              estimate: { type: "number" },
-              dueDate: { type: "string" },
-              labels: { type: "array", items: { type: "string" } },
-              state: { type: "string" },
-              parentId: { type: "string" },
-              blockedBy: { type: "array", items: { type: "string" } },
-              blocks: { type: "array", items: { type: "string" } }
+              team: { type: "string", description: "Team key or ID (e.g. 'ENG'). Falls back to action teamKey." },
+              title: { type: "string", description: "Issue title" },
+              description: { type: "string", description: "Description text" },
+              priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
+              assignee: { type: "string", description: "Assignee user ID, email, or name" },
+              project: { type: "string", description: "Project name or ID" },
+              estimate: { type: "number", enum: [1, 2, 3, 5, 8], description: "Story points estimate (1, 2, 3, 5, 8)" },
+              dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
+              labels: { type: "array", items: { type: "string" }, description: "Array of label names or IDs" },
+              state: { type: "string", description: "Initial workflow state name or ID" },
+              parentId: { type: "string", description: "Parent issue ID or identifier" },
+              blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
+              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
             },
             required: ["title"]
           },
@@ -15086,73 +15033,19 @@ var init_tools = __esm(() => {
       required: ["action"]
     }
   };
-  bulkCreateIssuesToolSchema = {
-    name: "linear_bulk_create_issues",
-    description: "Batch create multiple Linear issues in a single tool call for maximum agent execution speed.",
+  getWorkspaceToolSchema = {
+    name: "belifoa_get_workspace",
+    description: "Get teams, projects, and issue labels available in the workspace.",
     inputSchema: {
       type: "object",
       properties: {
-        issues: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              team: { type: "string", description: "Team key or ID (e.g. 'ENG')" },
-              title: { type: "string", description: "Issue title" },
-              description: { type: "string", description: "Description text" },
-              priority: { type: "number", description: "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)" },
-              assignee: { type: "string", description: "Assignee user ID, email, or name" },
-              project: { type: "string", description: "Project name or ID" },
-              estimate: { type: "number", description: "Story points estimate" },
-              dueDate: { type: "string", description: "Due date (YYYY-MM-DD)" },
-              labels: { type: "array", items: { type: "string" }, description: "Labels" },
-              state: { type: "string", description: "Workflow state name or ID" },
-              parentId: { type: "string", description: "Parent issue ID or identifier" },
-              blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
-              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
-            },
-            required: ["title"]
-          },
-          description: "List of issue objects to create"
+        profileName: {
+          type: "string",
+          description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
         },
-        defaultTeamKey: { type: "string", description: "Default team key if omitted in individual issue items" },
-        checkExisting: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team" },
-        idempotent: { type: "boolean", description: "If true, skip creating duplicate issues with identical title in target team (alias)" },
-        profileName: { type: "string", description: "Target workspace profile name" },
         format: {
           type: "string",
           enum: ["markdown", "compact_json"],
-          default: "markdown"
-        }
-      },
-      required: ["issues"]
-    }
-  };
-  getTeamsAndProjectsToolSchema = {
-    name: "linear_get_teams_and_projects",
-    description: "Get list of available Linear teams and projects for the active workspace.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
-        format: {
-          type: "string",
-          enum: ["markdown", "compact_json"],
-          default: "markdown"
-        }
-      }
-    }
-  };
-  getLabelsToolSchema = {
-    name: "linear_get_labels",
-    description: "Get list of available issue labels for the active workspace.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        profileName: { type: "string", description: "Target workspace profile name for parallel agent isolation" },
-        format: {
-          type: "string",
-          enum: ["markdown", "compact_json", "raw_json"],
           default: "markdown"
         }
       }
@@ -15167,6 +15060,7 @@ var init_tools = __esm(() => {
     "search_issues",
     "get_my_issues",
     "manage_issue",
+    "get_workspace",
     "create_issue",
     "update_issue",
     "close_issue",
@@ -15180,21 +15074,83 @@ var init_tools = __esm(() => {
   ]);
 });
 
+// package.json
+var package_default;
+var init_package = __esm(() => {
+  package_default = {
+    name: "belifoa",
+    version: "0.5.3",
+    description: "\u26A1 High-performance, compact Linear client & MCP server for AI agents. Reduces prompt context payload by 70\u201380% with persistent auth, CLI, skills & git hooks.",
+    main: "./dist/index.js",
+    module: "./dist/index.js",
+    types: "./dist/index.d.ts",
+    bin: {
+      belifoa: "./dist/cli/index.js"
+    },
+    repository: {
+      type: "git",
+      url: "git+https://github.com/ImBIOS/belifoa.git"
+    },
+    scripts: {
+      build: "bun build ./src/cli/index.ts ./src/mcp/server.ts ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly || true",
+      "build:binary": "bun build --compile --outfile=dist/belifoa src/cli/index.ts",
+      "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
+      prepare: "bun run build",
+      dev: "bun run src/cli/index.ts",
+      mcp: "bun run src/mcp/server.ts",
+      test: "bun test",
+      benchmark: "bun run benchmark/runner.ts"
+    },
+    keywords: [
+      "linear",
+      "linear-api",
+      "mcp",
+      "mcp-server",
+      "model-context-protocol",
+      "ai-agent",
+      "agentic-ai",
+      "antigravity",
+      "token-optimization",
+      "context-window",
+      "cli",
+      "bun",
+      "typescript",
+      "linear-agent",
+      "developer-tools",
+      "skills",
+      "plugins",
+      "hooks"
+    ],
+    author: "ImBIOS",
+    license: "MIT",
+    dependencies: {
+      "@modelcontextprotocol/sdk": "^1.1.0",
+      commander: "^13.0.0",
+      zod: "^3.24.1"
+    },
+    devDependencies: {
+      "@types/bun": "latest",
+      "@types/node": "^22.10.2",
+      typescript: "^5.7.2"
+    }
+  };
+});
+
 // src/mcp/server.ts
 var exports_server = {};
 __export(exports_server, {
   startMcpServer: () => startMcpServer
 });
-async function startMcpServer() {
+async function startMcpServer(profileName) {
   const server = new Server({
     name: "belifoa",
-    version: "0.5.0"
+    version: package_default.version
   }, {
     capabilities: {
       tools: {}
     }
   });
-  const client = new BelifoaClient;
+  const client = new BelifoaClient(undefined, profileName);
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: getMcpToolSchemas()
@@ -15225,6 +15181,7 @@ var init_server3 = __esm(() => {
   init_types();
   init_client();
   init_tools();
+  init_package();
   if (import.meta.main) {
     startMcpServer().catch((err) => {
       console.error("Belifoa MCP Server Error:", err);
@@ -17289,7 +17246,7 @@ init_config();
 init_formatters();
 import { readFileSync as readFileSync2 } from "fs";
 var program2 = new Command;
-program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.2");
+program2.name("belifoa").description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI").version("0.5.3");
 program2.command("init [profile]").description("Initialize project-local .belifoarc.json bound to a specific workspace profile").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Default team key for this project").option("-a, --assignee <user>", "Default assignee for issue creation (e.g. 'me')").action((profileArg, options) => {
   try {
     const profileName = profileArg || options.profile || options.workspace;
@@ -17680,9 +17637,9 @@ program2.command("projects").description("List all Linear projects").option("-p,
     process.exit(1);
   }
 });
-program2.command("mcp").description("Start the Stdio MCP Server for Belifoa").action(async () => {
+program2.command("mcp").description("Start the Stdio MCP Server for Belifoa").option("-p, --profile <profile>", "Target workspace profile (defaults to active profile)").action(async (options) => {
   const { startMcpServer: startMcpServer2 } = await Promise.resolve().then(() => (init_server3(), exports_server));
-  await startMcpServer2();
+  await startMcpServer2(options.profile);
 });
 program2.command("format").description("Format raw Linear GraphQL API JSON response into agent-compact output").requiredOption("-i, --input <file>", "Input JSON file path").option("-f, --format <format>", "Output format (markdown|compact_json)", "markdown").action((options) => {
   try {
