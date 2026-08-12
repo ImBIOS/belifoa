@@ -166,7 +166,7 @@ describe("Belifoa New Features Unit Tests", () => {
     delete process.env.BELIFOA_DEFAULT_ASSIGNEE;
   });
 
-  it("1. Tool Namespacing in Monorepos: getMcpToolSchemas prefixes tools with workspace profile and handleToolCall resolves prefixed tool calls", async () => {
+  it("1. Single-MCP Multi-Workspace: getMcpToolSchemas emits one unprefixed belifoa_* set and handleToolCall resolves both new and legacy prefixed names", async () => {
     addProfile(
       "myrehat",
       "lin_api_myrehat_123",
@@ -175,10 +175,24 @@ describe("Belifoa New Features Unit Tests", () => {
     );
     switchProfile("myrehat");
 
-    const schemas = getMcpToolSchemas("myrehat");
-    expect(schemas.some((s) => s.name === "belifoa_myrehat_create_issue")).toBe(true);
-    expect(schemas.some((s) => s.name === "belifoa_myrehat_list_issues")).toBe(true);
-    expect(schemas.some((s) => s.name === "belifoa_myrehat_get_issue")).toBe(true);
+    const schemas = getMcpToolSchemas();
+    expect(schemas.some((s) => s.name === "belifoa_get_issue")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_search_issues")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_get_my_issues")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_manage_issue")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_get_workspace")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_auth_status")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_auth_switch")).toBe(true);
+    expect(schemas.some((s) => s.name === "belifoa_set_api_key")).toBe(true);
+    expect(schemas).toHaveLength(8);
+
+    // Every schema must declare an optional profileName for cross-workspace calls
+    for (const s of schemas) {
+      expect(s.inputSchema.properties.profileName).toBeDefined();
+    }
+
+    // No profile is baked into any tool name — schemas are profile-independent
+    expect(schemas.some((s) => s.name.includes("myrehat"))).toBe(false);
 
     const client = new BelifoaClient("fake-key", "myrehat");
     client.getMyIssues = async () => [
@@ -192,9 +206,22 @@ describe("Belifoa New Features Unit Tests", () => {
       },
     ];
 
-    const result = await handleToolCall("belifoa_myrehat_list_issues", {}, client);
+    // New unprefixed name resolves
+    const result = await handleToolCall(
+      "belifoa_get_my_issues",
+      { profileName: "myrehat" },
+      client
+    );
     expect(result.content[0].text).toContain("MYR-10");
     expect(result.content[0].text).toContain("[belifoa] Active Profile");
+
+    // Legacy prefixed names (old pinned MCP configs) still resolve
+    const legacy = await handleToolCall("belifoa_myrehat_get_my_issues", {}, client);
+    expect(legacy.content[0].text).toContain("MYR-10");
+
+    // Legacy aliases map onto the unified tool set
+    const alias = await handleToolCall("belifoa_myrehat_my_issues", {}, client);
+    expect(alias.content[0].text).toContain("MYR-10");
   });
 
   it("2. Automatic Directory Ancestor Resolution: parses .mcp.json and scans submodules", () => {

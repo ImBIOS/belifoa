@@ -3,16 +3,14 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { BelifoaClient } from "../core/client.js";
-import {
-  getMcpToolSchemas,
-  handleToolCall,
-} from "./tools.js";
+import { getMcpToolSchemas, handleToolCall } from "./tools.js";
+import pkg from "../../package.json";
 
-export async function startMcpServer() {
+export async function startMcpServer(profileName?: string) {
   const server = new Server(
     {
       name: "belifoa",
-      version: "0.5.0",
+      version: pkg.version,
     },
     {
       capabilities: {
@@ -21,7 +19,7 @@ export async function startMcpServer() {
     }
   );
 
-  const client = new BelifoaClient();
+  const client = new BelifoaClient(undefined, profileName);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {

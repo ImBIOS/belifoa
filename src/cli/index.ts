@@ -30,7 +30,7 @@ const program = new Command();
 program
   .name("belifoa")
   .description("Better Linear for Agent - Compact, Multi-Auth, Workspace & Team Switching Linear CLI")
-  .version("0.5.2");
+  .version("0.5.3");
 
 // Init command to create project-local config
 program
@@ -660,9 +660,10 @@ program
 program
   .command("mcp")
   .description("Start the Stdio MCP Server for Belifoa")
-  .action(async () => {
+  .option("-p, --profile <profile>", "Target workspace profile (defaults to active profile)")
+  .action(async (options) => {
     const { startMcpServer } = await import("../mcp/server.js");
-    await startMcpServer();
+    await startMcpServer(options.profile);
   });
 
 // Utility command to format raw JSON files
