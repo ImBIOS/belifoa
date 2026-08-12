@@ -15,7 +15,9 @@ This document contains mandatory guidelines, architectural principles, and workf
   3. Commit as `chore(release): bump version to x.y.z` and `git push origin canary`
   4. **Create annotated tag**: `git tag -a vx.y.z -m "release vx.y.z: <summary>" && git push origin vx.y.z`
   5. **Create GitHub Release**: `gh release create vx.y.z --title "vx.y.z" --notes "..."` (group changes under `## Features` / `## Fixes` / `## Tests` headings)
-  6. **Never** skip the GitHub Release — a tag without a release means the tarball CDN cache for `bun x` is never busted and users keep getting the old build. Any release note placeholder is fine; only the release itself is non-negotiable.
+  6. **Post-Release Sanity Check**: `bun x github:ImBIOS/belifoa#vx.y.z --version` must print `x.y.z` from a clean temp dir. If it prints an older version, the committed `dist/` was stale — rebuild and re-release.
+  7. **Never** skip the GitHub Release — a tag without a release means the tarball CDN cache for `bun x` is never busted and users keep getting the old build. Any release note placeholder is fine; only the release itself is non-negotiable.
+- **`dist/` is the shipped artifact (verified empirically)**: `bun x github:ImBIOS/belifoa#<ref>` installs dependencies but does **NOT** run the repo's `prepare`/lifecycle scripts (bun 1.3.14, verified with a marker probe). Consumers execute the committed `dist/` verbatim, so a src edit without a `pnpm run build` + dist commit is an unreleased edit. Every release MUST rebuild `dist/` (step 2) and commit it (step 3).
 - **Git Tags & GitHub Releases**: The rule above supersedes any doubt: version bump → tag → push → GitHub Release for every fix/feature.
 - **Keep Agent Skills & Documentation Up-To-Date**: Whenever adding or modifying CLI commands, MCP tools, flags, or configuration behavior, ALWAYS update `skills/linear-agent/SKILL.md` (and `.agents/skills/linear-agent/SKILL.md` if present) and `README.md` so that LLM agents reading the skill instructions always have accurate and complete capability context.
 
