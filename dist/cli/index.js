@@ -13103,10 +13103,10 @@ function saveConfig(config2) {
   const configDir = getConfigDir();
   const configFile = getConfigFile();
   if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true, mode: 448 });
   }
   const tmpFile = `${configFile}.tmp.${process.pid}.${Math.random().toString(36).substring(2, 8)}`;
-  writeFileSync(tmpFile, JSON.stringify(config2, null, 2), "utf-8");
+  writeFileSync(tmpFile, JSON.stringify(config2, null, 2), { encoding: "utf-8", mode: 384 });
   renameSync(tmpFile, configFile);
 }
 function checkDirectoryForConfig(dir) {

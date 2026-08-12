@@ -48,10 +48,10 @@ export function saveConfig(config: BelifoaConfig): void {
   const configDir = getConfigDir();
   const configFile = getConfigFile();
   if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
   }
   const tmpFile = `${configFile}.tmp.${process.pid}.${Math.random().toString(36).substring(2, 8)}`;
-  writeFileSync(tmpFile, JSON.stringify(config, null, 2), "utf-8");
+  writeFileSync(tmpFile, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o600 });
   renameSync(tmpFile, configFile);
 }
 
