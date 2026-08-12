@@ -11,13 +11,13 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 - **Persistent Auth**: Uses `LINEAR_API_KEY` (Personal API Key) or `~/.config/belifoa/config.json`.
 - **70%+ Token Footprint Savings**: Formatted Markdown tables/cards instead of massive, raw GraphQL API JSON objects.
 - **Smart Zero-Config Repo, Team & Submodule Resolution**: Auto-detects matching workspace profile and team key from Git remote URL, `.belifoarc.json`, or `.mcp.json` traversing parent and submodule directory trees.
-- **MCP Tool Namespacing for Monorepos**: Prefixes MCP tools with workspace profile name (e.g. `belifoa_myrehat_create_issue` or `belifoa_myrehat_list_issues`) to prevent tool collisions when multiple MCP servers run concurrently.
+- **Single-MCP Multi-Workspace**: One MCP server instance exposes 8 unprefixed `belifoa_*` tools; target any saved workspace per call with the optional `profileName` argument (defaults to active profile). No need to pin one MCP instance per workspace.
 - **Explicit Active Profile Banner**: Prints a 1-line context header (`[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)`) on CLI & MCP outputs for immediate visual confirmation.
 - **Standardized CLI Flags**: Consistent `-p/--profile`, `-w/--workspace`, and `-t/--team` across all CLI subcommands (`list`, `issue list`, `my-issues`, `search`, `create`, `update`, `close`).
 - **Git Branch Helper**: Generate and checkout standard Linear branch names (`belifoa branch ENG-123 -b` or `--checkout`).
 - **Idempotency & Duplicate Prevention**: Avoid duplicate issues with `--check-existing` / `--idempotent` in creation & import commands or `checkExisting` parameter in MCP tools.
 - **Hierarchy & Relations**: Support for `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tools.
-- **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create", issues: [...] })`.
+- **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `belifoa_manage_issue({ action: "bulk_create", issues: [...] })`.
 - **Self-Correcting LLM Errors**: Structured JSON errors returning valid `availableTeams`, `availableStates`, `availableUsers`, and `availableProfiles` on invalid inputs so agents self-correct in 1 turn.
 
 ## Usage Modes
@@ -52,14 +52,16 @@ bun x github:ImBIOS/belifoa#canary labels
 ```
 
 ### 2. Streamlined MCP Tools
-When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp`, use these consolidated tools:
-- `linear_get_issue({ id: "ENG-123", format: "markdown" })`
-- `linear_search_issues({ query: "auth bug", teamKey: "ENG" })`
-- `linear_get_my_issues()`
-- `linear_manage_issue({ action: "create", title: "Subtask fix", parentId: "ENG-100", blockedBy: ["ENG-99"] })`
-- `linear_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
-- `linear_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
-- `linear_manage_issue({ action: "bulk_create", issues: [{ title: "Task 1" }, { title: "Task 2" }] })`
-- `linear_bulk_create_issues({ issues: [{ title: "Feature A", parentId: "ENG-100" }] })`
-- `linear_get_teams_and_projects()`
-- `linear_get_labels()`
+When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp` (or `... mcp --profile <name>` to pin a launch profile), one server exposes 8 tools targeting any workspace via the optional `profileName` argument (defaults to active profile):
+
+- `belifoa_auth_status({ profileName: "myrehat" })` — active + all saved profiles, org, viewer
+- `belifoa_auth_switch({ profileName: "playzuzu" })` — activate profile or default team
+- `belifoa_set_api_key({ apiKey: "lin_api_...", profileName: "playzuzu" })` — save new profile key
+- `belifoa_get_issue({ id: "ENG-123", format: "markdown" })`
+- `belifoa_search_issues({ query: "auth bug", teamKey: "ENG" })`
+- `belifoa_get_my_issues()`
+- `belifoa_manage_issue({ action: "create", title: "Subtask fix", parentId: "ENG-100", blockedBy: ["ENG-99"] })`
+- `belifoa_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
+- `belifoa_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
+- `belifoa_manage_issue({ action: "bulk_create", issues: [{ title: "Task 1" }, { title: "Task 2" }] })`
+- `belifoa_get_workspace()` — teams, projects, and labels in one call

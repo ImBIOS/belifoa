@@ -45,13 +45,13 @@ Standard Linear integrations for LLM agents suffer from three major inefficienci
 
 - **⚡ Token-Efficient Context Formatting**: CLI defaults to ANSI-styled `cli_table`, while MCP tools default to lightweight `markdown` and `compact_json` to maximize token budget.
 - **🔐 Multi-Profile & Workspace Isolation**: Manage multiple Linear accounts and team profiles seamlessly without cross-project state leakage.
-- **🏷️ MCP Tool Namespacing for Monorepos**: Prefixes tool names with the active workspace profile (e.g., `belifoa_myrehat_create_issue`, `belifoa_myrehat_list_issues`) to eliminate collisions when multiple MCP servers or root definitions are active.
+- **🏷️ Single-MCP Multi-Workspace Isolation**: One MCP server instance exposes 8 unprefixed `belifoa_*` tools; any saved workspace is targeted per call via the optional `profileName` argument (defaults to the active profile). No pinning one MCP instance per workspace.
 - **📂 Automatic Ancestor & Submodule Resolution**: Automatically traverses parent/child directories to auto-detect project configuration from `.belifoarc.json`, `.belifoa`, or `.mcp.json` in submodules.
 - **💬 Explicit Active Profile Banner**: Displays a 1-line context header (`[belifoa] Active Profile: myrehat (Workspace: MyRehat, Default Team: MYR)`) on CLI and MCP outputs for instant target workspace verification.
 - **🎛️ Standardized CLI Flags**: Uniform `-p/--profile`, `-w/--workspace`, and `-t/--team` flag support across all subcommands (`list`, `issue list`, `my-issues`, `search`, `create`, `update`, `close`).
 - **🔗 First-Class Hierarchy & Relations**: Easily link `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tool calls.
 - **🌿 Git Branch Helper Output**: Get ready-to-use Linear git branch slugs (`belifoa branch ENG-123`) and checkout branches directly (`--checkout`).
-- **📦 MCP Bulk Issue Creation**: Batch create multiple backlog items in a single API roundtrip via `linear_bulk_create_issues` or `linear_manage_issue({ action: "bulk_create" })`.
+- **📦 MCP Bulk Issue Creation**: Batch create multiple backlog items in a single API roundtrip via `belifoa_manage_issue({ action: "bulk_create" })`.
 - **🔄 Self-Correcting Error Payloads for LLMs**: Returns structured JSON errors with valid suggestions (`availableTeams`, `availableStates`, `availableUsers`, `availableProfiles`) on invalid parameters so AI agents self-correct in 1 turn.
 - **🚀 Zero-Installation Direct Execution**: Run instantly using `bun x github:ImBIOS/belifoa#canary` or `pnpm add github:ImBIOS/belifoa`.
 
@@ -155,6 +155,8 @@ Belifoa runs natively as a Model Context Protocol (MCP) server for AI code edito
   }
 }
 ```
+
+> The server exposes one unprefixed tool set (`belifoa_get_issue`, `belifoa_manage_issue`, …); pass `profileName` in any tool call to target another saved workspace, or pin the launch profile with `mcp --profile <name>` / `BELIFOA_PROFILE`.
 
 ---
 
