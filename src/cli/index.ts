@@ -15,6 +15,7 @@ import {
 import {
   formatIssueList,
   formatIssueDetail,
+  formatSearchResult,
   formatTeams,
   formatProjects,
   formatProfiles,
@@ -255,6 +256,7 @@ program
   .option("-q, --query <query>", "Search query or keyword")
   .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Limit results", "15")
+  .option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)")
   .action(async (options) => {
     try {
       const profileName = options.profile || options.workspace;
@@ -262,11 +264,12 @@ program
       const client = new BelifoaClient(undefined, profileName);
       const teamKey = options.team || active?.defaultTeam;
       const query = options.query || "";
-      const issues = await client.searchIssues(query, {
+      const page = await client.searchIssuesPage(query, {
         teamKey,
         limit: parseInt(options.limit),
+        after: options.after,
       });
-      console.log(formatIssueList(issues, options.format as OutputFormat, active));
+      console.log(formatSearchResult(page.issues, options.format as OutputFormat, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
@@ -282,16 +285,17 @@ program
   .option("-t, --team <team>", "Filter by team key (e.g., ENG)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Number of issues", "20")
+  .option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)")
   .action(async (options) => {
     try {
       const profileName = options.profile || options.workspace;
       const active = getActiveProfile(profileName);
       const client = new BelifoaClient(undefined, profileName);
-      const issues = await client.getMyIssues(parseInt(options.limit));
+      const page = await client.getMyIssuesPage(parseInt(options.limit), { after: options.after });
       const filtered = options.team
-        ? issues.filter((i) => i.teamKey?.toLowerCase() === options.team.toLowerCase())
-        : issues;
-      console.log(formatIssueList(filtered, options.format as OutputFormat, active));
+        ? page.issues.filter((i) => i.teamKey?.toLowerCase() === options.team.toLowerCase())
+        : page.issues;
+      console.log(formatSearchResult(filtered, options.format as OutputFormat, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
@@ -307,17 +311,19 @@ program
   .option("-t, --team <key>", "Filter by team key (e.g., ENG)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .option("-l, --limit <number>", "Limit results", "15")
+  .option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)")
   .action(async (query: string, options) => {
     try {
       const profileName = options.profile || options.workspace;
       const active = getActiveProfile(profileName);
       const client = new BelifoaClient(undefined, profileName);
       const teamKey = options.team || active?.defaultTeam;
-      const issues = await client.searchIssues(query, {
+      const page = await client.searchIssuesPage(query, {
         teamKey,
         limit: parseInt(options.limit),
+        after: options.after,
       });
-      console.log(formatIssueList(issues, options.format as OutputFormat, active));
+      console.log(formatSearchResult(page.issues, options.format as OutputFormat, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

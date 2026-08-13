@@ -1,4 +1,4 @@
-import { type LinearIssue, type LinearTeam, type LinearProject, type LinearUser, type LinearOrganization, type CreateIssueParams, type UpdateIssueParams } from "./types.js";
+import { type LinearIssue, type LinearTeam, type LinearProject, type LinearUser, type LinearOrganization, type CreateIssueParams, type UpdateIssueParams, type SearchPage } from "./types.js";
 export declare class BelifoaClient {
     private apiKey;
     private profileName?;
@@ -59,7 +59,16 @@ export declare class BelifoaClient {
      */
     resolveLabelIds(labelsInput: string[] | string): Promise<string[]>;
     /**
-     * Search issues with query string or filters
+     * Search issues with query string or filters, with relevance ranking and pagination.
+     */
+    searchIssuesPage(queryStr: string, options?: {
+        teamKey?: string;
+        assigneeId?: string;
+        limit?: number;
+        after?: string;
+    }): Promise<SearchPage>;
+    /**
+     * Search issues with query string or filters (array convenience wrapper).
      */
     searchIssues(queryStr: string, options?: {
         teamKey?: string;
@@ -71,7 +80,13 @@ export declare class BelifoaClient {
      */
     getIssue(identifierOrId: string): Promise<LinearIssue>;
     /**
-     * List issues assigned to the viewer
+     * List issues assigned to the viewer, with pagination support.
+     */
+    getMyIssuesPage(limit?: number, options?: {
+        after?: string;
+    }): Promise<SearchPage>;
+    /**
+     * List issues assigned to the viewer (array convenience wrapper).
      */
     getMyIssues(limit?: number): Promise<LinearIssue[]>;
     /**

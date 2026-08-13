@@ -19,12 +19,14 @@ var __toESM = (mod, isNodeMode, target) => {
   }
   target = mod != null ? __create(__getProtoOf(mod)) : {};
   const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
-  for (let key of __getOwnPropNames(mod))
-    if (!__hasOwnProp.call(to, key))
-      __defProp(to, key, {
-        get: __accessProp.bind(mod, key),
-        enumerable: true
-      });
+  if (mod && typeof mod === "object" || typeof mod === "function") {
+    for (let key of __getOwnPropNames(mod))
+      if (!__hasOwnProp.call(to, key))
+        __defProp(to, key, {
+          get: __accessProp.bind(mod, key),
+          enumerable: true
+        });
+  }
   if (canCache)
     cache.set(mod, to);
   return to;
@@ -502,7 +504,7 @@ function formatActiveProfileBanner(profile, format = "cli_table") {
   return `\x1B[1m\x1B[34m[belifoa]\x1B[0m \x1B[1mActive Profile:\x1B[0m \x1B[36m${name}\x1B[0m (\x1B[1mWorkspace:\x1B[0m ${org}, \x1B[1mDefault Team:\x1B[0m ${team})
 `;
 }
-function formatIssueList(issues, format = "cli_table", activeProfile) {
+function formatIssueList(issues, format = "cli_table", activeProfile, meta) {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
   }
@@ -513,7 +515,8 @@ function formatIssueList(issues, format = "cli_table", activeProfile) {
       status: i.status,
       priority: i.priorityLabel,
       assignee: i.assignee || undefined,
-      labels: i.labels?.length ? i.labels : undefined
+      labels: i.labels?.length ? i.labels : undefined,
+      match: i.matchContext || undefined
     })));
   }
   const banner = formatActiveProfileBanner(activeProfile, format);
@@ -525,18 +528,22 @@ function formatIssueList(issues, format = "cli_table", activeProfile) {
     const rows2 = issues.map((i) => {
       const assigneeStr = i.assignee ? `@${i.assignee}` : "-";
       const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
-      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
+      const matchStr = i.matchContext ? i.matchContext.substring(0, 60) : "-";
+      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} | \`${matchStr}\` |`;
     });
     const content2 = [
       `Found ${issues.length} issue(s):`,
       "",
-      "| ID | Title | Status | Priority | Assignee | Labels |",
-      "|---|---|---|---|---|---|",
+      "| ID | Title | Status | Priority | Assignee | Labels | Match |",
+      "|---|---|---|---|---|---|---|",
       ...rows2
     ].join(`
 `);
+    const footer2 = formatPaginationFooter(issues.length, meta, "markdown");
+    const full2 = footer2 ? `${content2}
+${footer2}` : content2;
     return banner ? `${banner}
-${content2}` : content2;
+${full2}` : full2;
   }
   const rows = issues.map((i) => ({
     id: i.identifier,
@@ -544,16 +551,18 @@ ${content2}` : content2;
     status: i.status,
     priority: i.priorityLabel || "None",
     assignee: i.assignee ? `@${i.assignee}` : "-",
-    labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-"
+    labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-",
+    match: i.matchContext ? i.matchContext.substring(0, 24) : "-"
   }));
   const maxId = Math.max(7, ...rows.map((r) => r.id.length));
   const maxTitle = Math.max(25, ...rows.map((r) => r.title.length));
   const maxStatus = Math.max(10, ...rows.map((r) => r.status.length));
   const maxPriority = Math.max(10, ...rows.map((r) => r.priority.length));
   const maxAssignee = Math.max(10, ...rows.map((r) => r.assignee.length));
-  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}`;
-  const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}`;
-  const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`);
+  const maxMatch = Math.max(5, ...rows.map((r) => r.match.length));
+  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}  ${pad("MATCH", maxMatch)}`;
+  const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}  ${"\u2500".repeat(maxMatch)}`;
+  const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}  \x1B[33m${pad(r.match, maxMatch)}\x1B[0m`);
   const content = [
     `\x1B[1mFound ${issues.length} issue(s):\x1B[0m`,
     "",
@@ -562,8 +571,30 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
+  const footer = formatPaginationFooter(issues.length, meta, "cli_table");
+  const full = footer ? `${content}
+${footer}` : content;
   return maybeStripAnsi(banner ? `${banner}
-${content}` : content, format);
+${full}` : full, format);
+}
+function formatPaginationFooter(shown, meta, format = "cli_table") {
+  if (!meta?.hasNextPage)
+    return;
+  if (format === "markdown") {
+    return `> **Pagination**: ${shown} shown \xB7 more available \xB7 next cursor: \`${meta.endCursor || ""}\``;
+  }
+  return `\x1B[2mMore results available. Next page: --after ${meta.endCursor || "<cursor>"}\x1B[0m`;
+}
+function formatSearchResult(issues, format = "cli_table", meta, activeProfile) {
+  if (format === "compact_json" && meta?.hasNextPage) {
+    return JSON.stringify({
+      count: issues.length,
+      hasNextPage: true,
+      endCursor: meta.endCursor,
+      issues: JSON.parse(formatIssueList(issues, "compact_json"))
+    });
+  }
+  return formatIssueList(issues, format, activeProfile, meta);
 }
 function formatIssueDetail(issue, format = "cli_table", activeProfile) {
   if (format === "raw_json") {
@@ -880,6 +911,79 @@ var init_formatters = __esm(() => {
   };
 });
 
+// src/core/relevance.ts
+function tokenizeSearchQuery(query) {
+  return (query.toLowerCase().match(/[a-z0-9]+/g) || []).filter((t) => t.length > 1);
+}
+function scoreIssueRelevance(issue, tokens, rawQuery) {
+  const title = (issue.title || "").toLowerCase();
+  const description = (issue.description || "").toLowerCase();
+  const labels = (issue.labels || []).join(" ").toLowerCase();
+  const comments = (issue.comments || []).map((c) => c.body || "").join(`
+`).toLowerCase();
+  const identifier = (issue.identifier || "").toLowerCase();
+  const match = {
+    score: 0,
+    title: [],
+    description: [],
+    labels: [],
+    comments: [],
+    identifier: false
+  };
+  for (const tok of tokens) {
+    if (identifier.includes(tok)) {
+      match.identifier = true;
+      match.score += IDENTIFIER_WEIGHT;
+    }
+    if (title.includes(tok)) {
+      match.title.push(tok);
+      match.score += TITLE_WEIGHT;
+    }
+    if (description.includes(tok)) {
+      match.description.push(tok);
+      match.score += DESCRIPTION_WEIGHT;
+    }
+    if (labels.includes(tok)) {
+      match.labels.push(tok);
+      match.score += LABEL_WEIGHT;
+    }
+    if (comments.includes(tok)) {
+      match.comments.push(tok);
+      match.score += COMMENT_WEIGHT;
+    }
+    if (match.identifier || match.title.includes(tok) || match.description.includes(tok) || match.labels.includes(tok) || match.comments.includes(tok)) {
+      match.score += COVERAGE_BONUS;
+    }
+  }
+  if (rawQuery) {
+    const phrase = rawQuery.toLowerCase();
+    if (tokens.length > 1) {
+      if (title.includes(phrase))
+        match.score += TITLE_PHRASE_BONUS;
+      if (description.includes(phrase))
+        match.score += DESCRIPTION_PHRASE_BONUS;
+      if (comments.includes(phrase))
+        match.score += COMMENT_PHRASE_BONUS;
+    }
+  }
+  return match;
+}
+function buildMatchContext(match) {
+  const parts = [];
+  if (match.identifier)
+    parts.push("id");
+  if (match.title.length > 0)
+    parts.push(`t:${match.title.join(",")}`);
+  if (match.description.length > 0)
+    parts.push(`d:${match.description.join(",")}`);
+  if (match.labels.length > 0)
+    parts.push(`l:${match.labels.join(",")}`);
+  if (match.comments.length > 0)
+    parts.push(`c:${match.comments.join(",")}`);
+  return parts.length > 0 ? parts.join(" \xB7 ") : undefined;
+}
+var TITLE_WEIGHT = 4, DESCRIPTION_WEIGHT = 2, LABEL_WEIGHT = 2, COMMENT_WEIGHT = 1, IDENTIFIER_WEIGHT = 8, COVERAGE_BONUS = 1, TITLE_PHRASE_BONUS = 10, DESCRIPTION_PHRASE_BONUS = 5, COMMENT_PHRASE_BONUS = 2;
+
 // src/core/client.ts
 class BelifoaClient {
   apiKey;
@@ -1098,7 +1202,7 @@ class BelifoaClient {
     }
     return resultIds;
   }
-  async searchIssues(queryStr, options = {}) {
+  async searchIssuesPage(queryStr, options = {}) {
     const limit = options.limit || 15;
     const cleanQuery = queryStr ? queryStr.trim() : "";
     const issueFields = `
@@ -1121,45 +1225,85 @@ class BelifoaClient {
       children { nodes { id identifier title priority state { name } } }
       relations { nodes { id type relatedIssue { id identifier title } } }
     `;
+    const pageInfo = `
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    `;
     if (!cleanQuery) {
       const teamFilter = options.teamKey ? { team: { key: { eq: options.teamKey.toUpperCase() } } } : undefined;
       const query2 = `
-        query ListIssues($filter: IssueFilter, $first: Int) {
-          issues(filter: $filter, first: $first) {
+        query ListIssues($filter: IssueFilter, $first: Int, $after: String) {
+          issues(filter: $filter, first: $first, after: $after) {
             nodes {
               ${issueFields}
             }
+            ${pageInfo}
           }
         }
       `;
       const data2 = await this.graphql(query2, {
         filter: teamFilter,
-        first: limit
+        first: limit,
+        after: options.after || null
       });
       let nodes2 = data2.issues?.nodes || [];
       if (options.teamKey) {
         nodes2 = nodes2.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
       }
-      return nodes2.map(cleanRawIssue);
+      return {
+        issues: nodes2.map(cleanRawIssue),
+        hasNextPage: data2.issues?.pageInfo?.hasNextPage ?? false,
+        endCursor: data2.issues?.pageInfo?.endCursor ?? undefined
+      };
     }
     const query = `
-      query SearchIssues($term: String!, $first: Int) {
-        searchIssues(term: $term, first: $first) {
+      query SearchIssues($term: String!, $first: Int, $after: String) {
+        searchIssues(term: $term, first: $first, after: $after) {
           nodes {
             ${issueFields}
+            comments(first: 5) {
+              nodes {
+                id
+                body
+                createdAt
+                user { id name email }
+              }
+            }
           }
+          ${pageInfo}
         }
       }
     `;
     const data = await this.graphql(query, {
       term: cleanQuery,
-      first: limit
+      first: Math.min(Math.max(limit * 2, limit), 40),
+      after: options.after || null
     });
     let nodes = data.searchIssues?.nodes || [];
     if (options.teamKey) {
       nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
     }
-    return nodes.map(cleanRawIssue);
+    const tokens = tokenizeSearchQuery(cleanQuery);
+    const scored = nodes.map(cleanRawIssue).map((issue, idx) => ({ issue, ctx: scoreIssueRelevance(issue, tokens, cleanQuery), idx }));
+    scored.sort((a, b) => b.ctx.score - a.ctx.score || a.idx - b.idx);
+    const positives = scored.filter((s) => s.ctx.score > 0);
+    const kept = positives.length > 0 ? positives : scored;
+    const ranked = kept.slice(0, limit).map(({ issue, ctx }) => ({
+      ...issue,
+      matchScore: ctx.score,
+      matchContext: buildMatchContext(ctx),
+      comments: undefined
+    }));
+    return {
+      issues: ranked,
+      hasNextPage: data.searchIssues?.pageInfo?.hasNextPage ?? false,
+      endCursor: data.searchIssues?.pageInfo?.endCursor ?? undefined
+    };
+  }
+  async searchIssues(queryStr, options = {}) {
+    return (await this.searchIssuesPage(queryStr, options)).issues;
   }
   async getIssue(identifierOrId) {
     const query = `
@@ -1200,11 +1344,11 @@ class BelifoaClient {
     }
     return cleanRawIssue(data.issue);
   }
-  async getMyIssues(limit = 20) {
+  async getMyIssuesPage(limit = 20, options = {}) {
     const query = `
-      query MyIssues($first: Int) {
+      query MyIssues($first: Int, $after: String) {
         viewer {
-          assignedIssues(first: $first, orderBy: updatedAt) {
+          assignedIssues(first: $first, after: $after, orderBy: updatedAt) {
             nodes {
               id
               identifier
@@ -1225,14 +1369,27 @@ class BelifoaClient {
               children { nodes { id identifier title priority state { name } } }
               relations { nodes { id type relatedIssue { id identifier title } } }
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
       }
     `;
     const data = await this.graphql(query, {
-      first: limit
+      first: limit,
+      after: options.after || null
     });
-    return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
+    const conn = data.viewer?.assignedIssues;
+    return {
+      issues: (conn?.nodes || []).map(cleanRawIssue),
+      hasNextPage: conn?.pageInfo?.hasNextPage ?? false,
+      endCursor: conn?.pageInfo?.endCursor ?? undefined
+    };
+  }
+  async getMyIssues(limit = 20) {
+    return (await this.getMyIssuesPage(limit)).issues;
   }
   async createIssue(params) {
     if (params.checkExisting) {
@@ -1673,15 +1830,16 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
       }
       case "search_issues": {
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await targetClient.searchIssues(args.query || "", {
+        const page = await targetClient.searchIssuesPage(args.query || "", {
           teamKey,
-          limit: args.limit
+          limit: args.limit,
+          after: args.after
         });
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
       case "get_my_issues": {
-        const issues = await targetClient.getMyIssues(args.limit || 20);
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        const page = await targetClient.getMyIssuesPage(args.limit || 20, { after: args.after });
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
       case "manage_issue": {
         if (args.action === "bulk_create") {
@@ -1898,7 +2056,7 @@ var init_tools = __esm(() => {
   };
   searchIssuesToolSchema = {
     name: "belifoa_search_issues",
-    description: "Search Linear issues by keyword query, team, or status.",
+    description: "Search Linear issues by keyword query, team, or status. Results are re-ranked by title/description/label/comment token overlap and each row shows which query tokens matched where (t:/d:/l:/c:). Supports cursor pagination via 'after'.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1909,6 +2067,10 @@ var init_tools = __esm(() => {
         },
         teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
         limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
+        after: {
+          type: "string",
+          description: "Cursor from a previous result's 'endCursor' to fetch the next page"
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -1920,7 +2082,7 @@ var init_tools = __esm(() => {
   };
   getMyIssuesToolSchema = {
     name: "belifoa_get_my_issues",
-    description: "Get issues assigned to the authenticated user.",
+    description: "Get issues assigned to the authenticated user. Supports cursor pagination via 'after'.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1929,6 +2091,10 @@ var init_tools = __esm(() => {
           description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
         },
         limit: { type: "number", default: 20 },
+        after: {
+          type: "string",
+          description: "Cursor from a previous result's 'endCursor' to fetch the next page"
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -2063,41 +2229,42 @@ init_formatters();
 init_client();
 init_tools();
 export {
-  switchProfile,
-  switchDefaultTeam,
-  stripAnsi,
-  setApiKeyToolSchema,
-  searchIssuesToolSchema,
-  saveProjectConfig,
-  saveConfig,
-  removeProfile,
-  manageIssueToolSchema,
-  loadConfig,
-  listProfiles,
-  handleToolCall,
-  getWorkspaceToolSchema,
-  getProjectConfig,
-  getPriorityLabel,
-  getMyIssuesToolSchema,
-  getMcpToolSchemas,
-  getIssueToolSchema,
-  getGitRemoteUrl,
-  getAuthGuidanceMessage,
-  getActiveProfile,
-  generateGitBranchName,
-  formatTeams,
-  formatProjects,
-  formatProfiles,
-  formatLabels,
-  formatIssueList,
-  formatIssueDetail,
-  formatActiveProfileBanner,
-  detectTeamFromCwd,
-  detectProfileFromGitRemote,
-  cleanRawIssue,
-  authSwitchToolSchema,
-  authStatusToolSchema,
-  addProfile,
+  BelifoaClient,
   BelifoaSuggestionError,
-  BelifoaClient
+  addProfile,
+  authStatusToolSchema,
+  authSwitchToolSchema,
+  cleanRawIssue,
+  detectProfileFromGitRemote,
+  detectTeamFromCwd,
+  formatActiveProfileBanner,
+  formatIssueDetail,
+  formatIssueList,
+  formatLabels,
+  formatProfiles,
+  formatProjects,
+  formatSearchResult,
+  formatTeams,
+  generateGitBranchName,
+  getActiveProfile,
+  getAuthGuidanceMessage,
+  getGitRemoteUrl,
+  getIssueToolSchema,
+  getMcpToolSchemas,
+  getMyIssuesToolSchema,
+  getPriorityLabel,
+  getProjectConfig,
+  getWorkspaceToolSchema,
+  handleToolCall,
+  listProfiles,
+  loadConfig,
+  manageIssueToolSchema,
+  removeProfile,
+  saveConfig,
+  saveProjectConfig,
+  searchIssuesToolSchema,
+  setApiKeyToolSchema,
+  stripAnsi,
+  switchDefaultTeam,
+  switchProfile
 };

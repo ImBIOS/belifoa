@@ -21,7 +21,17 @@ export declare function formatActiveProfileBanner(profile?: AuthProfile | null, 
 /**
  * Format a list of issues into compact agent or clean CLI terminal output
  */
-export declare function formatIssueList(issues: LinearIssue[], format?: OutputFormat, activeProfile?: AuthProfile | null): string;
+export declare function formatIssueList(issues: LinearIssue[], format?: OutputFormat, activeProfile?: AuthProfile | null, meta?: {
+    hasNextPage?: boolean;
+    endCursor?: string;
+}): string;
+/**
+ * Format search/list results including pagination meta (compact_json wraps with page info).
+ */
+export declare function formatSearchResult(issues: LinearIssue[], format?: OutputFormat, meta?: {
+    hasNextPage?: boolean;
+    endCursor?: string;
+}, activeProfile?: AuthProfile | null): string;
 /**
  * Format a detailed single issue view
  */

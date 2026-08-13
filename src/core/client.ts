@@ -9,7 +9,9 @@ import {
   type LinearOrganization,
   type CreateIssueParams,
   type UpdateIssueParams,
+  type SearchPage,
 } from "./types.js";
+import { tokenizeSearchQuery, scoreIssueRelevance, buildMatchContext } from "./relevance.js";
 
 const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
 
@@ -315,12 +317,12 @@ export class BelifoaClient {
   }
 
   /**
-   * Search issues with query string or filters
+   * Search issues with query string or filters, with relevance ranking and pagination.
    */
-  async searchIssues(
+  async searchIssuesPage(
     queryStr: string,
-    options: { teamKey?: string; assigneeId?: string; limit?: number } = {}
-  ): Promise<LinearIssue[]> {
+    options: { teamKey?: string; assigneeId?: string; limit?: number; after?: string } = {}
+  ): Promise<SearchPage> {
     const limit = options.limit || 15;
     const cleanQuery = queryStr ? queryStr.trim() : "";
 
@@ -345,21 +347,30 @@ export class BelifoaClient {
       relations { nodes { id type relatedIssue { id identifier title } } }
     `;
 
+    const pageInfo = `
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    `;
+
     if (!cleanQuery) {
       const teamFilter = options.teamKey ? { team: { key: { eq: options.teamKey.toUpperCase() } } } : undefined;
       const query = `
-        query ListIssues($filter: IssueFilter, $first: Int) {
-          issues(filter: $filter, first: $first) {
+        query ListIssues($filter: IssueFilter, $first: Int, $after: String) {
+          issues(filter: $filter, first: $first, after: $after) {
             nodes {
               ${issueFields}
             }
+            ${pageInfo}
           }
         }
       `;
 
-      const data = await this.graphql<{ issues: { nodes: any[] } }>(query, {
+      const data = await this.graphql<{ issues: { nodes: any[]; pageInfo: any } }>(query, {
         filter: teamFilter,
         first: limit,
+        after: options.after || null,
       });
 
       let nodes = data.issues?.nodes || [];
@@ -367,22 +378,36 @@ export class BelifoaClient {
         nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
       }
 
-      return nodes.map(cleanRawIssue);
+      return {
+        issues: nodes.map(cleanRawIssue),
+        hasNextPage: data.issues?.pageInfo?.hasNextPage ?? false,
+        endCursor: data.issues?.pageInfo?.endCursor ?? undefined,
+      };
     }
 
     const query = `
-      query SearchIssues($term: String!, $first: Int) {
-        searchIssues(term: $term, first: $first) {
+      query SearchIssues($term: String!, $first: Int, $after: String) {
+        searchIssues(term: $term, first: $first, after: $after) {
           nodes {
             ${issueFields}
+            comments(first: 5) {
+              nodes {
+                id
+                body
+                createdAt
+                user { id name email }
+              }
+            }
           }
+          ${pageInfo}
         }
       }
     `;
 
-    const data = await this.graphql<{ searchIssues: { nodes: any[] } }>(query, {
+    const data = await this.graphql<{ searchIssues: { nodes: any[]; pageInfo: any } }>(query, {
       term: cleanQuery,
-      first: limit,
+      first: Math.min(Math.max(limit * 2, limit), 40),
+      after: options.after || null,
     });
 
     let nodes = data.searchIssues?.nodes || [];
@@ -390,7 +415,38 @@ export class BelifoaClient {
       nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
     }
 
-    return nodes.map(cleanRawIssue);
+    const tokens = tokenizeSearchQuery(cleanQuery);
+    const scored = nodes
+      .map(cleanRawIssue)
+      .map((issue, idx) => ({ issue, ctx: scoreIssueRelevance(issue, tokens, cleanQuery), idx }));
+
+    scored.sort((a, b) => b.ctx.score - a.ctx.score || a.idx - b.idx);
+
+    const positives = scored.filter((s) => s.ctx.score > 0);
+    const kept = positives.length > 0 ? positives : scored;
+
+    const ranked = kept.slice(0, limit).map(({ issue, ctx }) => ({
+      ...issue,
+      matchScore: ctx.score,
+      matchContext: buildMatchContext(ctx),
+      comments: undefined,
+    }));
+
+    return {
+      issues: ranked,
+      hasNextPage: data.searchIssues?.pageInfo?.hasNextPage ?? false,
+      endCursor: data.searchIssues?.pageInfo?.endCursor ?? undefined,
+    };
+  }
+
+  /**
+   * Search issues with query string or filters (array convenience wrapper).
+   */
+  async searchIssues(
+    queryStr: string,
+    options: { teamKey?: string; assigneeId?: string; limit?: number } = {}
+  ): Promise<LinearIssue[]> {
+    return (await this.searchIssuesPage(queryStr, options)).issues;
   }
 
   /**
@@ -438,13 +494,13 @@ export class BelifoaClient {
   }
 
   /**
-   * List issues assigned to the viewer
+   * List issues assigned to the viewer, with pagination support.
    */
-  async getMyIssues(limit: number = 20): Promise<LinearIssue[]> {
+  async getMyIssuesPage(limit: number = 20, options: { after?: string } = {}): Promise<SearchPage> {
     const query = `
-      query MyIssues($first: Int) {
+      query MyIssues($first: Int, $after: String) {
         viewer {
-          assignedIssues(first: $first, orderBy: updatedAt) {
+          assignedIssues(first: $first, after: $after, orderBy: updatedAt) {
             nodes {
               id
               identifier
@@ -465,16 +521,33 @@ export class BelifoaClient {
               children { nodes { id identifier title priority state { name } } }
               relations { nodes { id type relatedIssue { id identifier title } } }
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
       }
     `;
 
-    const data = await this.graphql<{ viewer: { assignedIssues: { nodes: any[] } } }>(query, {
+    const data = await this.graphql<{ viewer: { assignedIssues: { nodes: any[]; pageInfo: any } } }>(query, {
       first: limit,
+      after: options.after || null,
     });
 
-    return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
+    const conn = data.viewer?.assignedIssues;
+    return {
+      issues: (conn?.nodes || []).map(cleanRawIssue),
+      hasNextPage: conn?.pageInfo?.hasNextPage ?? false,
+      endCursor: conn?.pageInfo?.endCursor ?? undefined,
+    };
+  }
+
+  /**
+   * List issues assigned to the viewer (array convenience wrapper).
+   */
+  async getMyIssues(limit: number = 20): Promise<LinearIssue[]> {
+    return (await this.getMyIssuesPage(limit)).issues;
   }
 
   /**

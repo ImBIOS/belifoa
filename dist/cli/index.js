@@ -20,12 +20,14 @@ var __toESM = (mod, isNodeMode, target) => {
   }
   target = mod != null ? __create(__getProtoOf(mod)) : {};
   const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
-  for (let key of __getOwnPropNames(mod))
-    if (!__hasOwnProp.call(to, key))
-      __defProp(to, key, {
-        get: __accessProp.bind(mod, key),
-        enumerable: true
-      });
+  if (mod && typeof mod === "object" || typeof mod === "function") {
+    for (let key of __getOwnPropNames(mod))
+      if (!__hasOwnProp.call(to, key))
+        __defProp(to, key, {
+          get: __accessProp.bind(mod, key),
+          enumerable: true
+        });
+  }
   if (canCache)
     cache.set(mod, to);
   return to;
@@ -113,55 +115,55 @@ var init_core = __esm(() => {
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/core/util.js
 var exports_util = {};
 __export(exports_util, {
-  unwrapMessage: () => unwrapMessage,
-  stringifyPrimitive: () => stringifyPrimitive,
-  required: () => required,
-  randomString: () => randomString,
-  propertyKeyTypes: () => propertyKeyTypes,
-  promiseAllObject: () => promiseAllObject,
-  primitiveTypes: () => primitiveTypes,
-  prefixIssues: () => prefixIssues,
-  pick: () => pick,
-  partial: () => partial,
-  optionalKeys: () => optionalKeys,
-  omit: () => omit,
-  numKeys: () => numKeys,
-  nullish: () => nullish,
-  normalizeParams: () => normalizeParams,
-  merge: () => merge,
-  jsonStringifyReplacer: () => jsonStringifyReplacer,
-  joinValues: () => joinValues,
-  issue: () => issue,
-  isPlainObject: () => isPlainObject,
-  isObject: () => isObject,
-  getSizableOrigin: () => getSizableOrigin,
-  getParsedType: () => getParsedType,
-  getLengthableOrigin: () => getLengthableOrigin,
-  getEnumValues: () => getEnumValues,
-  getElementAtPath: () => getElementAtPath,
-  floatSafeRemainder: () => floatSafeRemainder,
-  finalizeIssue: () => finalizeIssue,
-  extend: () => extend,
-  escapeRegex: () => escapeRegex,
-  esc: () => esc,
-  defineLazy: () => defineLazy,
-  createTransparentProxy: () => createTransparentProxy,
-  clone: () => clone,
-  cleanRegex: () => cleanRegex,
-  cleanEnum: () => cleanEnum,
-  captureStackTrace: () => captureStackTrace,
-  cached: () => cached,
-  assignProp: () => assignProp,
-  assertNotEqual: () => assertNotEqual,
-  assertNever: () => assertNever,
-  assertIs: () => assertIs,
-  assertEqual: () => assertEqual,
-  assert: () => assert,
-  allowsEval: () => allowsEval,
-  aborted: () => aborted,
-  NUMBER_FORMAT_RANGES: () => NUMBER_FORMAT_RANGES,
+  BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
   Class: () => Class,
-  BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES
+  NUMBER_FORMAT_RANGES: () => NUMBER_FORMAT_RANGES,
+  aborted: () => aborted,
+  allowsEval: () => allowsEval,
+  assert: () => assert,
+  assertEqual: () => assertEqual,
+  assertIs: () => assertIs,
+  assertNever: () => assertNever,
+  assertNotEqual: () => assertNotEqual,
+  assignProp: () => assignProp,
+  cached: () => cached,
+  captureStackTrace: () => captureStackTrace,
+  cleanEnum: () => cleanEnum,
+  cleanRegex: () => cleanRegex,
+  clone: () => clone,
+  createTransparentProxy: () => createTransparentProxy,
+  defineLazy: () => defineLazy,
+  esc: () => esc,
+  escapeRegex: () => escapeRegex,
+  extend: () => extend,
+  finalizeIssue: () => finalizeIssue,
+  floatSafeRemainder: () => floatSafeRemainder,
+  getElementAtPath: () => getElementAtPath,
+  getEnumValues: () => getEnumValues,
+  getLengthableOrigin: () => getLengthableOrigin,
+  getParsedType: () => getParsedType,
+  getSizableOrigin: () => getSizableOrigin,
+  isObject: () => isObject,
+  isPlainObject: () => isPlainObject,
+  issue: () => issue,
+  joinValues: () => joinValues,
+  jsonStringifyReplacer: () => jsonStringifyReplacer,
+  merge: () => merge,
+  normalizeParams: () => normalizeParams,
+  nullish: () => nullish,
+  numKeys: () => numKeys,
+  omit: () => omit,
+  optionalKeys: () => optionalKeys,
+  partial: () => partial,
+  pick: () => pick,
+  prefixIssues: () => prefixIssues,
+  primitiveTypes: () => primitiveTypes,
+  promiseAllObject: () => promiseAllObject,
+  propertyKeyTypes: () => propertyKeyTypes,
+  randomString: () => randomString,
+  required: () => required,
+  stringifyPrimitive: () => stringifyPrimitive,
+  unwrapMessage: () => unwrapMessage
 });
 function assertEqual(val) {
   return val;
@@ -3248,14 +3250,14 @@ var init_checks3 = __esm(() => {
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/classic/iso.js
 var exports_iso2 = {};
 __export(exports_iso2, {
-  time: () => time2,
-  duration: () => duration2,
-  datetime: () => datetime2,
-  date: () => date2,
-  ZodISOTime: () => ZodISOTime,
-  ZodISODuration: () => ZodISODuration,
+  ZodISODate: () => ZodISODate,
   ZodISODateTime: () => ZodISODateTime,
-  ZodISODate: () => ZodISODate
+  ZodISODuration: () => ZodISODuration,
+  ZodISOTime: () => ZodISOTime,
+  date: () => date2,
+  datetime: () => datetime2,
+  duration: () => duration2,
+  time: () => time2
 });
 function datetime2(params) {
   return _isoDateTime(ZodISODateTime, params);
@@ -5898,7 +5900,7 @@ var init_protocol = __esm(() => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
-var require_code = __commonJS((exports) => {
+var require_code = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = undefined;
 
@@ -6052,7 +6054,7 @@ var require_code = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/scope.js
-var require_scope = __commonJS((exports) => {
+var require_scope = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = undefined;
   var code_1 = require_code();
@@ -6198,7 +6200,7 @@ var require_scope = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/index.js
-var require_codegen = __commonJS((exports) => {
+var require_codegen = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = undefined;
   var code_1 = require_code();
@@ -6908,7 +6910,7 @@ var require_codegen = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/util.js
-var require_util = __commonJS((exports) => {
+var require_util = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = undefined;
   var codegen_1 = require_codegen();
@@ -7072,7 +7074,7 @@ var require_util = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/names.js
-var require_names = __commonJS((exports) => {
+var require_names = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var names = {
@@ -7097,7 +7099,7 @@ var require_names = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/errors.js
-var require_errors = __commonJS((exports) => {
+var require_errors = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = undefined;
   var codegen_1 = require_codegen();
@@ -7215,7 +7217,7 @@ var require_errors = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/boolSchema.js
-var require_boolSchema = __commonJS((exports) => {
+var require_boolSchema = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = undefined;
   var errors_1 = require_errors();
@@ -7263,7 +7265,7 @@ var require_boolSchema = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/rules.js
-var require_rules = __commonJS((exports) => {
+var require_rules = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.getRules = exports.isJSONType = undefined;
   var _jsonTypes = ["string", "number", "integer", "boolean", "null", "object", "array"];
@@ -7291,7 +7293,7 @@ var require_rules = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/applicability.js
-var require_applicability = __commonJS((exports) => {
+var require_applicability = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = undefined;
   function schemaHasRulesForType({ schema, self }, type) {
@@ -7311,7 +7313,7 @@ var require_applicability = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/dataType.js
-var require_dataType = __commonJS((exports) => {
+var require_dataType = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = undefined;
   var rules_1 = require_rules();
@@ -7492,7 +7494,7 @@ var require_dataType = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/defaults.js
-var require_defaults = __commonJS((exports) => {
+var require_defaults = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.assignDefaults = undefined;
   var codegen_1 = require_codegen();
@@ -7526,7 +7528,7 @@ var require_defaults = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/code.js
-var require_code2 = __commonJS((exports) => {
+var require_code2 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = undefined;
   var codegen_1 = require_codegen();
@@ -7655,7 +7657,7 @@ var require_code2 = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/keyword.js
-var require_keyword = __commonJS((exports) => {
+var require_keyword = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = undefined;
   var codegen_1 = require_codegen();
@@ -7770,7 +7772,7 @@ var require_keyword = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/subschema.js
-var require_subschema = __commonJS((exports) => {
+var require_subschema = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = undefined;
   var codegen_1 = require_codegen();
@@ -7850,7 +7852,7 @@ var require_subschema = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js
-var require_fast_deep_equal = __commonJS((exports, module) => {
+var require_fast_deep_equal = __commonJS(function(exports, module) {
   module.exports = function equal(a, b) {
     if (a === b)
       return true;
@@ -7892,7 +7894,7 @@ var require_fast_deep_equal = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/json-schema-traverse@1.0.0/node_modules/json-schema-traverse/index.js
-var require_json_schema_traverse = __commonJS((exports, module) => {
+var require_json_schema_traverse = __commonJS(function(exports, module) {
   var traverse = module.exports = function(schema, opts, cb) {
     if (typeof opts == "function") {
       cb = opts;
@@ -7975,7 +7977,7 @@ var require_json_schema_traverse = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/resolve.js
-var require_resolve = __commonJS((exports) => {
+var require_resolve = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = undefined;
   var util_1 = require_util();
@@ -8128,7 +8130,7 @@ var require_resolve = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/index.js
-var require_validate = __commonJS((exports) => {
+var require_validate = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.getData = exports.KeywordCxt = exports.validateFunctionCode = undefined;
   var boolSchema_1 = require_boolSchema();
@@ -8633,7 +8635,7 @@ var require_validate = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/validation_error.js
-var require_validation_error = __commonJS((exports) => {
+var require_validation_error = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
 
   class ValidationError extends Error {
@@ -8647,7 +8649,7 @@ var require_validation_error = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/ref_error.js
-var require_ref_error = __commonJS((exports) => {
+var require_ref_error = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var resolve_1 = require_resolve();
 
@@ -8662,7 +8664,7 @@ var require_ref_error = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/index.js
-var require_compile = __commonJS((exports) => {
+var require_compile = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = undefined;
   var codegen_1 = require_codegen();
@@ -8883,7 +8885,7 @@ var require_compile = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/data.json
-var require_data = __commonJS((exports, module) => {
+var require_data = __commonJS(function(exports, module) {
   module.exports = {
     $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
     description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -8900,7 +8902,7 @@ var require_data = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/fast-uri@3.1.4/node_modules/fast-uri/lib/utils.js
-var require_utils = __commonJS((exports, module) => {
+var require_utils = __commonJS(function(exports, module) {
   var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
   var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
   var isHexPair = RegExp.prototype.test.bind(/^[\da-f]{2}$/iu);
@@ -9211,7 +9213,7 @@ var require_utils = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/fast-uri@3.1.4/node_modules/fast-uri/lib/schemes.js
-var require_schemes = __commonJS((exports, module) => {
+var require_schemes = __commonJS(function(exports, module) {
   var { isUUID } = require_utils();
   var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
   var supportedSchemeNames = [
@@ -9385,7 +9387,7 @@ var require_schemes = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/fast-uri@3.1.4/node_modules/fast-uri/index.js
-var require_fast_uri = __commonJS((exports, module) => {
+var require_fast_uri = __commonJS(function(exports, module) {
   var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
   var { SCHEMES, getSchemeHandler } = require_schemes();
   function normalize(uri, options) {
@@ -9673,7 +9675,7 @@ var require_fast_uri = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/uri.js
-var require_uri = __commonJS((exports) => {
+var require_uri = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var uri = require_fast_uri();
   uri.code = 'require("ajv/dist/runtime/uri").default';
@@ -9681,7 +9683,7 @@ var require_uri = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/core.js
-var require_core = __commonJS((exports) => {
+var require_core = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = undefined;
   var validate_1 = require_validate();
@@ -10274,7 +10276,7 @@ var require_core = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/id.js
-var require_id = __commonJS((exports) => {
+var require_id = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var def = {
     keyword: "id",
@@ -10286,7 +10288,7 @@ var require_id = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/ref.js
-var require_ref = __commonJS((exports) => {
+var require_ref = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.callRef = exports.getValidate = undefined;
   var ref_error_1 = require_ref_error();
@@ -10405,7 +10407,7 @@ var require_ref = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/index.js
-var require_core2 = __commonJS((exports) => {
+var require_core2 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var id_1 = require_id();
   var ref_1 = require_ref();
@@ -10423,7 +10425,7 @@ var require_core2 = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
-var require_limitNumber = __commonJS((exports) => {
+var require_limitNumber = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var ops = codegen_1.operators;
@@ -10452,7 +10454,7 @@ var require_limitNumber = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
-var require_multipleOf = __commonJS((exports) => {
+var require_multipleOf = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var error2 = {
@@ -10477,7 +10479,7 @@ var require_multipleOf = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
-var require_ucs2length = __commonJS((exports) => {
+var require_ucs2length = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   function ucs2length(str) {
     const len = str.length;
@@ -10500,7 +10502,7 @@ var require_ucs2length = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitLength.js
-var require_limitLength = __commonJS((exports) => {
+var require_limitLength = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -10529,7 +10531,7 @@ var require_limitLength = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/pattern.js
-var require_pattern = __commonJS((exports) => {
+var require_pattern = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var code_1 = require_code2();
   var util_1 = require_util();
@@ -10563,7 +10565,7 @@ var require_pattern = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
-var require_limitProperties = __commonJS((exports) => {
+var require_limitProperties = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var error2 = {
@@ -10589,7 +10591,7 @@ var require_limitProperties = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/required.js
-var require_required = __commonJS((exports) => {
+var require_required = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var code_1 = require_code2();
   var codegen_1 = require_codegen();
@@ -10668,7 +10670,7 @@ var require_required = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitItems.js
-var require_limitItems = __commonJS((exports) => {
+var require_limitItems = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var error2 = {
@@ -10694,7 +10696,7 @@ var require_limitItems = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/equal.js
-var require_equal = __commonJS((exports) => {
+var require_equal = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var equal = require_fast_deep_equal();
   equal.code = 'require("ajv/dist/runtime/equal").default';
@@ -10702,7 +10704,7 @@ var require_equal = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
-var require_uniqueItems = __commonJS((exports) => {
+var require_uniqueItems = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var dataType_1 = require_dataType();
   var codegen_1 = require_codegen();
@@ -10766,7 +10768,7 @@ var require_uniqueItems = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/const.js
-var require_const = __commonJS((exports) => {
+var require_const = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -10792,7 +10794,7 @@ var require_const = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/enum.js
-var require_enum = __commonJS((exports) => {
+var require_enum = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -10838,7 +10840,7 @@ var require_enum = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/index.js
-var require_validation = __commonJS((exports) => {
+var require_validation = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var limitNumber_1 = require_limitNumber();
   var multipleOf_1 = require_multipleOf();
@@ -10868,7 +10870,7 @@ var require_validation = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
-var require_additionalItems = __commonJS((exports) => {
+var require_additionalItems = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.validateAdditionalItems = undefined;
   var codegen_1 = require_codegen();
@@ -10918,7 +10920,7 @@ var require_additionalItems = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items.js
-var require_items = __commonJS((exports) => {
+var require_items = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.validateTuple = undefined;
   var codegen_1 = require_codegen();
@@ -10972,7 +10974,7 @@ var require_items = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
-var require_prefixItems = __commonJS((exports) => {
+var require_prefixItems = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var items_1 = require_items();
   var def = {
@@ -10986,7 +10988,7 @@ var require_prefixItems = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items2020.js
-var require_items2020 = __commonJS((exports) => {
+var require_items2020 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -11018,7 +11020,7 @@ var require_items2020 = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/contains.js
-var require_contains = __commonJS((exports) => {
+var require_contains = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -11109,7 +11111,7 @@ var require_contains = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
-var require_dependencies = __commonJS((exports) => {
+var require_dependencies = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = undefined;
   var codegen_1 = require_codegen();
@@ -11194,7 +11196,7 @@ var require_dependencies = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
-var require_propertyNames = __commonJS((exports) => {
+var require_propertyNames = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -11234,7 +11236,7 @@ var require_propertyNames = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
-var require_additionalProperties = __commonJS((exports) => {
+var require_additionalProperties = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var code_1 = require_code2();
   var codegen_1 = require_codegen();
@@ -11337,7 +11339,7 @@ var require_additionalProperties = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/properties.js
-var require_properties = __commonJS((exports) => {
+var require_properties = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var validate_1 = require_validate();
   var code_1 = require_code2();
@@ -11392,7 +11394,7 @@ var require_properties = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
-var require_patternProperties = __commonJS((exports) => {
+var require_patternProperties = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var code_1 = require_code2();
   var codegen_1 = require_codegen();
@@ -11463,7 +11465,7 @@ var require_patternProperties = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/not.js
-var require_not = __commonJS((exports) => {
+var require_not = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var util_1 = require_util();
   var def = {
@@ -11491,7 +11493,7 @@ var require_not = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
-var require_anyOf = __commonJS((exports) => {
+var require_anyOf = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var code_1 = require_code2();
   var def = {
@@ -11505,7 +11507,7 @@ var require_anyOf = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
-var require_oneOf = __commonJS((exports) => {
+var require_oneOf = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -11560,7 +11562,7 @@ var require_oneOf = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/allOf.js
-var require_allOf = __commonJS((exports) => {
+var require_allOf = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var util_1 = require_util();
   var def = {
@@ -11584,7 +11586,7 @@ var require_allOf = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/if.js
-var require_if = __commonJS((exports) => {
+var require_if = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var util_1 = require_util();
@@ -11650,7 +11652,7 @@ var require_if = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
-var require_thenElse = __commonJS((exports) => {
+var require_thenElse = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var util_1 = require_util();
   var def = {
@@ -11665,7 +11667,7 @@ var require_thenElse = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/index.js
-var require_applicator = __commonJS((exports) => {
+var require_applicator = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var additionalItems_1 = require_additionalItems();
   var prefixItems_1 = require_prefixItems();
@@ -11708,7 +11710,7 @@ var require_applicator = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/format.js
-var require_format = __commonJS((exports) => {
+var require_format = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var error2 = {
@@ -11795,7 +11797,7 @@ var require_format = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/index.js
-var require_format2 = __commonJS((exports) => {
+var require_format2 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var format_1 = require_format();
   var format = [format_1.default];
@@ -11803,7 +11805,7 @@ var require_format2 = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/metadata.js
-var require_metadata = __commonJS((exports) => {
+var require_metadata = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.contentVocabulary = exports.metadataVocabulary = undefined;
   exports.metadataVocabulary = [
@@ -11823,7 +11825,7 @@ var require_metadata = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft7.js
-var require_draft7 = __commonJS((exports) => {
+var require_draft7 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var core_1 = require_core2();
   var validation_1 = require_validation();
@@ -11842,7 +11844,7 @@ var require_draft7 = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/types.js
-var require_types = __commonJS((exports) => {
+var require_types = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.DiscrError = undefined;
   var DiscrError;
@@ -11853,7 +11855,7 @@ var require_types = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/index.js
-var require_discriminator = __commonJS((exports) => {
+var require_discriminator = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var codegen_1 = require_codegen();
   var types_1 = require_types();
@@ -11955,7 +11957,7 @@ var require_discriminator = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-draft-07.json
-var require_json_schema_draft_07 = __commonJS((exports, module) => {
+var require_json_schema_draft_07 = __commonJS(function(exports, module) {
   module.exports = {
     $schema: "http://json-schema.org/draft-07/schema#",
     $id: "http://json-schema.org/draft-07/schema#",
@@ -12110,7 +12112,7 @@ var require_json_schema_draft_07 = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/ajv.js
-var require_ajv = __commonJS((exports, module) => {
+var require_ajv = __commonJS(function(exports, module) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = undefined;
   var core_1 = require_core();
@@ -12178,7 +12180,7 @@ var require_ajv = __commonJS((exports, module) => {
 });
 
 // node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/formats.js
-var require_formats = __commonJS((exports) => {
+var require_formats = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.formatNames = exports.fastFormats = exports.fullFormats = undefined;
   function fmtDef(validate, compare) {
@@ -12355,7 +12357,7 @@ var require_formats = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/limit.js
-var require_limit = __commonJS((exports) => {
+var require_limit = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.formatLimitDefinition = undefined;
   var ajv_1 = require_ajv();
@@ -12424,7 +12426,7 @@ var require_limit = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/index.js
-var require_dist = __commonJS((exports, module) => {
+var require_dist = __commonJS(function(exports, module) {
   Object.defineProperty(exports, "__esModule", { value: true });
   var formats_1 = require_formats();
   var limit_1 = require_limit();
@@ -13507,7 +13509,7 @@ function formatActiveProfileBanner(profile, format = "cli_table") {
   return `\x1B[1m\x1B[34m[belifoa]\x1B[0m \x1B[1mActive Profile:\x1B[0m \x1B[36m${name}\x1B[0m (\x1B[1mWorkspace:\x1B[0m ${org}, \x1B[1mDefault Team:\x1B[0m ${team})
 `;
 }
-function formatIssueList(issues, format = "cli_table", activeProfile) {
+function formatIssueList(issues, format = "cli_table", activeProfile, meta) {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
   }
@@ -13518,7 +13520,8 @@ function formatIssueList(issues, format = "cli_table", activeProfile) {
       status: i.status,
       priority: i.priorityLabel,
       assignee: i.assignee || undefined,
-      labels: i.labels?.length ? i.labels : undefined
+      labels: i.labels?.length ? i.labels : undefined,
+      match: i.matchContext || undefined
     })));
   }
   const banner = formatActiveProfileBanner(activeProfile, format);
@@ -13530,18 +13533,22 @@ function formatIssueList(issues, format = "cli_table", activeProfile) {
     const rows2 = issues.map((i) => {
       const assigneeStr = i.assignee ? `@${i.assignee}` : "-";
       const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
-      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
+      const matchStr = i.matchContext ? i.matchContext.substring(0, 60) : "-";
+      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} | \`${matchStr}\` |`;
     });
     const content2 = [
       `Found ${issues.length} issue(s):`,
       "",
-      "| ID | Title | Status | Priority | Assignee | Labels |",
-      "|---|---|---|---|---|---|",
+      "| ID | Title | Status | Priority | Assignee | Labels | Match |",
+      "|---|---|---|---|---|---|---|",
       ...rows2
     ].join(`
 `);
+    const footer2 = formatPaginationFooter(issues.length, meta, "markdown");
+    const full2 = footer2 ? `${content2}
+${footer2}` : content2;
     return banner ? `${banner}
-${content2}` : content2;
+${full2}` : full2;
   }
   const rows = issues.map((i) => ({
     id: i.identifier,
@@ -13549,16 +13556,18 @@ ${content2}` : content2;
     status: i.status,
     priority: i.priorityLabel || "None",
     assignee: i.assignee ? `@${i.assignee}` : "-",
-    labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-"
+    labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-",
+    match: i.matchContext ? i.matchContext.substring(0, 24) : "-"
   }));
   const maxId = Math.max(7, ...rows.map((r) => r.id.length));
   const maxTitle = Math.max(25, ...rows.map((r) => r.title.length));
   const maxStatus = Math.max(10, ...rows.map((r) => r.status.length));
   const maxPriority = Math.max(10, ...rows.map((r) => r.priority.length));
   const maxAssignee = Math.max(10, ...rows.map((r) => r.assignee.length));
-  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}`;
-  const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}`;
-  const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`);
+  const maxMatch = Math.max(5, ...rows.map((r) => r.match.length));
+  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}  ${pad("MATCH", maxMatch)}`;
+  const divider = `  ${"\u2500".repeat(maxId)}  ${"\u2500".repeat(maxTitle)}  ${"\u2500".repeat(maxStatus)}  ${"\u2500".repeat(maxPriority)}  ${"\u2500".repeat(maxAssignee)}  ${"\u2500".repeat(maxMatch)}`;
+  const body = rows.map((r) => `  \x1B[1m\x1B[36m${pad(r.id, maxId)}\x1B[0m  ${pad(r.title, maxTitle)}  \x1B[32m${pad(r.status, maxStatus)}\x1B[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}  \x1B[33m${pad(r.match, maxMatch)}\x1B[0m`);
   const content = [
     `\x1B[1mFound ${issues.length} issue(s):\x1B[0m`,
     "",
@@ -13567,8 +13576,30 @@ ${content2}` : content2;
     ...body
   ].join(`
 `);
+  const footer = formatPaginationFooter(issues.length, meta, "cli_table");
+  const full = footer ? `${content}
+${footer}` : content;
   return maybeStripAnsi(banner ? `${banner}
-${content}` : content, format);
+${full}` : full, format);
+}
+function formatPaginationFooter(shown, meta, format = "cli_table") {
+  if (!meta?.hasNextPage)
+    return;
+  if (format === "markdown") {
+    return `> **Pagination**: ${shown} shown \xB7 more available \xB7 next cursor: \`${meta.endCursor || ""}\``;
+  }
+  return `\x1B[2mMore results available. Next page: --after ${meta.endCursor || "<cursor>"}\x1B[0m`;
+}
+function formatSearchResult(issues, format = "cli_table", meta, activeProfile) {
+  if (format === "compact_json" && meta?.hasNextPage) {
+    return JSON.stringify({
+      count: issues.length,
+      hasNextPage: true,
+      endCursor: meta.endCursor,
+      issues: JSON.parse(formatIssueList(issues, "compact_json"))
+    });
+  }
+  return formatIssueList(issues, format, activeProfile, meta);
 }
 function formatIssueDetail(issue2, format = "cli_table", activeProfile) {
   if (format === "raw_json") {
@@ -13898,6 +13929,79 @@ var init_types2 = __esm(() => {
   };
 });
 
+// src/core/relevance.ts
+function tokenizeSearchQuery(query) {
+  return (query.toLowerCase().match(/[a-z0-9]+/g) || []).filter((t) => t.length > 1);
+}
+function scoreIssueRelevance(issue2, tokens, rawQuery) {
+  const title = (issue2.title || "").toLowerCase();
+  const description = (issue2.description || "").toLowerCase();
+  const labels = (issue2.labels || []).join(" ").toLowerCase();
+  const comments = (issue2.comments || []).map((c) => c.body || "").join(`
+`).toLowerCase();
+  const identifier = (issue2.identifier || "").toLowerCase();
+  const match = {
+    score: 0,
+    title: [],
+    description: [],
+    labels: [],
+    comments: [],
+    identifier: false
+  };
+  for (const tok of tokens) {
+    if (identifier.includes(tok)) {
+      match.identifier = true;
+      match.score += IDENTIFIER_WEIGHT;
+    }
+    if (title.includes(tok)) {
+      match.title.push(tok);
+      match.score += TITLE_WEIGHT;
+    }
+    if (description.includes(tok)) {
+      match.description.push(tok);
+      match.score += DESCRIPTION_WEIGHT;
+    }
+    if (labels.includes(tok)) {
+      match.labels.push(tok);
+      match.score += LABEL_WEIGHT;
+    }
+    if (comments.includes(tok)) {
+      match.comments.push(tok);
+      match.score += COMMENT_WEIGHT;
+    }
+    if (match.identifier || match.title.includes(tok) || match.description.includes(tok) || match.labels.includes(tok) || match.comments.includes(tok)) {
+      match.score += COVERAGE_BONUS;
+    }
+  }
+  if (rawQuery) {
+    const phrase = rawQuery.toLowerCase();
+    if (tokens.length > 1) {
+      if (title.includes(phrase))
+        match.score += TITLE_PHRASE_BONUS;
+      if (description.includes(phrase))
+        match.score += DESCRIPTION_PHRASE_BONUS;
+      if (comments.includes(phrase))
+        match.score += COMMENT_PHRASE_BONUS;
+    }
+  }
+  return match;
+}
+function buildMatchContext(match) {
+  const parts = [];
+  if (match.identifier)
+    parts.push("id");
+  if (match.title.length > 0)
+    parts.push(`t:${match.title.join(",")}`);
+  if (match.description.length > 0)
+    parts.push(`d:${match.description.join(",")}`);
+  if (match.labels.length > 0)
+    parts.push(`l:${match.labels.join(",")}`);
+  if (match.comments.length > 0)
+    parts.push(`c:${match.comments.join(",")}`);
+  return parts.length > 0 ? parts.join(" \xB7 ") : undefined;
+}
+var TITLE_WEIGHT = 4, DESCRIPTION_WEIGHT = 2, LABEL_WEIGHT = 2, COMMENT_WEIGHT = 1, IDENTIFIER_WEIGHT = 8, COVERAGE_BONUS = 1, TITLE_PHRASE_BONUS = 10, DESCRIPTION_PHRASE_BONUS = 5, COMMENT_PHRASE_BONUS = 2;
+
 // src/core/client.ts
 class BelifoaClient {
   apiKey;
@@ -14116,7 +14220,7 @@ class BelifoaClient {
     }
     return resultIds;
   }
-  async searchIssues(queryStr, options = {}) {
+  async searchIssuesPage(queryStr, options = {}) {
     const limit = options.limit || 15;
     const cleanQuery = queryStr ? queryStr.trim() : "";
     const issueFields = `
@@ -14139,45 +14243,85 @@ class BelifoaClient {
       children { nodes { id identifier title priority state { name } } }
       relations { nodes { id type relatedIssue { id identifier title } } }
     `;
+    const pageInfo = `
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    `;
     if (!cleanQuery) {
       const teamFilter = options.teamKey ? { team: { key: { eq: options.teamKey.toUpperCase() } } } : undefined;
       const query2 = `
-        query ListIssues($filter: IssueFilter, $first: Int) {
-          issues(filter: $filter, first: $first) {
+        query ListIssues($filter: IssueFilter, $first: Int, $after: String) {
+          issues(filter: $filter, first: $first, after: $after) {
             nodes {
               ${issueFields}
             }
+            ${pageInfo}
           }
         }
       `;
       const data2 = await this.graphql(query2, {
         filter: teamFilter,
-        first: limit
+        first: limit,
+        after: options.after || null
       });
       let nodes2 = data2.issues?.nodes || [];
       if (options.teamKey) {
         nodes2 = nodes2.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
       }
-      return nodes2.map(cleanRawIssue);
+      return {
+        issues: nodes2.map(cleanRawIssue),
+        hasNextPage: data2.issues?.pageInfo?.hasNextPage ?? false,
+        endCursor: data2.issues?.pageInfo?.endCursor ?? undefined
+      };
     }
     const query = `
-      query SearchIssues($term: String!, $first: Int) {
-        searchIssues(term: $term, first: $first) {
+      query SearchIssues($term: String!, $first: Int, $after: String) {
+        searchIssues(term: $term, first: $first, after: $after) {
           nodes {
             ${issueFields}
+            comments(first: 5) {
+              nodes {
+                id
+                body
+                createdAt
+                user { id name email }
+              }
+            }
           }
+          ${pageInfo}
         }
       }
     `;
     const data = await this.graphql(query, {
       term: cleanQuery,
-      first: limit
+      first: Math.min(Math.max(limit * 2, limit), 40),
+      after: options.after || null
     });
     let nodes = data.searchIssues?.nodes || [];
     if (options.teamKey) {
       nodes = nodes.filter((n) => n.team?.key?.toUpperCase() === options.teamKey?.toUpperCase());
     }
-    return nodes.map(cleanRawIssue);
+    const tokens = tokenizeSearchQuery(cleanQuery);
+    const scored = nodes.map(cleanRawIssue).map((issue2, idx) => ({ issue: issue2, ctx: scoreIssueRelevance(issue2, tokens, cleanQuery), idx }));
+    scored.sort((a, b) => b.ctx.score - a.ctx.score || a.idx - b.idx);
+    const positives = scored.filter((s) => s.ctx.score > 0);
+    const kept = positives.length > 0 ? positives : scored;
+    const ranked = kept.slice(0, limit).map(({ issue: issue2, ctx }) => ({
+      ...issue2,
+      matchScore: ctx.score,
+      matchContext: buildMatchContext(ctx),
+      comments: undefined
+    }));
+    return {
+      issues: ranked,
+      hasNextPage: data.searchIssues?.pageInfo?.hasNextPage ?? false,
+      endCursor: data.searchIssues?.pageInfo?.endCursor ?? undefined
+    };
+  }
+  async searchIssues(queryStr, options = {}) {
+    return (await this.searchIssuesPage(queryStr, options)).issues;
   }
   async getIssue(identifierOrId) {
     const query = `
@@ -14218,11 +14362,11 @@ class BelifoaClient {
     }
     return cleanRawIssue(data.issue);
   }
-  async getMyIssues(limit = 20) {
+  async getMyIssuesPage(limit = 20, options = {}) {
     const query = `
-      query MyIssues($first: Int) {
+      query MyIssues($first: Int, $after: String) {
         viewer {
-          assignedIssues(first: $first, orderBy: updatedAt) {
+          assignedIssues(first: $first, after: $after, orderBy: updatedAt) {
             nodes {
               id
               identifier
@@ -14243,14 +14387,27 @@ class BelifoaClient {
               children { nodes { id identifier title priority state { name } } }
               relations { nodes { id type relatedIssue { id identifier title } } }
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
       }
     `;
     const data = await this.graphql(query, {
-      first: limit
+      first: limit,
+      after: options.after || null
     });
-    return (data.viewer?.assignedIssues?.nodes || []).map(cleanRawIssue);
+    const conn = data.viewer?.assignedIssues;
+    return {
+      issues: (conn?.nodes || []).map(cleanRawIssue),
+      hasNextPage: conn?.pageInfo?.hasNextPage ?? false,
+      endCursor: conn?.pageInfo?.endCursor ?? undefined
+    };
+  }
+  async getMyIssues(limit = 20) {
+    return (await this.getMyIssuesPage(limit)).issues;
   }
   async createIssue(params) {
     if (params.checkExisting) {
@@ -14691,15 +14848,16 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
       }
       case "search_issues": {
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await targetClient.searchIssues(args.query || "", {
+        const page = await targetClient.searchIssuesPage(args.query || "", {
           teamKey,
-          limit: args.limit
+          limit: args.limit,
+          after: args.after
         });
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
       case "get_my_issues": {
-        const issues = await targetClient.getMyIssues(args.limit || 20);
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        const page = await targetClient.getMyIssuesPage(args.limit || 20, { after: args.after });
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
       case "manage_issue": {
         if (args.action === "bulk_create") {
@@ -14916,7 +15074,7 @@ var init_tools = __esm(() => {
   };
   searchIssuesToolSchema = {
     name: "belifoa_search_issues",
-    description: "Search Linear issues by keyword query, team, or status.",
+    description: "Search Linear issues by keyword query, team, or status. Results are re-ranked by title/description/label/comment token overlap and each row shows which query tokens matched where (t:/d:/l:/c:). Supports cursor pagination via 'after'.",
     inputSchema: {
       type: "object",
       properties: {
@@ -14927,6 +15085,10 @@ var init_tools = __esm(() => {
         },
         teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
         limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
+        after: {
+          type: "string",
+          description: "Cursor from a previous result's 'endCursor' to fetch the next page"
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -14938,7 +15100,7 @@ var init_tools = __esm(() => {
   };
   getMyIssuesToolSchema = {
     name: "belifoa_get_my_issues",
-    description: "Get issues assigned to the authenticated user.",
+    description: "Get issues assigned to the authenticated user. Supports cursor pagination via 'after'.",
     inputSchema: {
       type: "object",
       properties: {
@@ -14947,6 +15109,10 @@ var init_tools = __esm(() => {
           description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
         },
         limit: { type: "number", default: 20 },
+        after: {
+          type: "string",
+          description: "Cursor from a previous result's 'endCursor' to fetch the next page"
+        },
         format: {
           type: "string",
           enum: ["markdown", "compact_json", "raw_json"],
@@ -15191,7 +15357,7 @@ var init_server3 = __esm(() => {
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/error.js
-var require_error = __commonJS((exports) => {
+var require_error = __commonJS(function(exports) {
   class CommanderError extends Error {
     constructor(exitCode, code, message) {
       super(message);
@@ -15215,7 +15381,7 @@ var require_error = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/argument.js
-var require_argument = __commonJS((exports) => {
+var require_argument = __commonJS(function(exports) {
   var { InvalidArgumentError } = require_error();
 
   class Argument {
@@ -15294,7 +15460,7 @@ var require_argument = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/help.js
-var require_help = __commonJS((exports) => {
+var require_help = __commonJS(function(exports) {
   var { humanReadableArgName } = require_argument();
 
   class Help {
@@ -15644,7 +15810,7 @@ ${itemIndentStr}`);
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/option.js
-var require_option = __commonJS((exports) => {
+var require_option = __commonJS(function(exports) {
   var { InvalidArgumentError } = require_error();
 
   class Option {
@@ -15822,7 +15988,7 @@ var require_option = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/suggestSimilar.js
-var require_suggestSimilar = __commonJS((exports) => {
+var require_suggestSimilar = __commonJS(function(exports) {
   var maxDistance = 3;
   function editDistance(a, b) {
     if (Math.abs(a.length - b.length) > maxDistance)
@@ -15895,7 +16061,7 @@ var require_suggestSimilar = __commonJS((exports) => {
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/command.js
-var require_command = __commonJS((exports) => {
+var require_command = __commonJS(function(exports) {
   var EventEmitter = __require("events").EventEmitter;
   var childProcess = __require("child_process");
   var path = __require("path");
@@ -17205,7 +17371,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/index.js
-var require_commander = __commonJS((exports) => {
+var require_commander = __commonJS(function(exports) {
   var { Argument } = require_argument();
   var { Command } = require_command();
   var { CommanderError, InvalidArgumentError } = require_error();
@@ -17389,47 +17555,49 @@ teamCmd.command("switch <teamKey>").description("Switch default team key for act
     process.exit(1);
   }
 });
-program2.command("list").description("List or search issues in active profile or specified team").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-q, --query <query>", "Search query or keyword").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (options) => {
+program2.command("list").description("List or search issues in active profile or specified team").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-q, --query <query>", "Search query or keyword").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)").action(async (options) => {
   try {
     const profileName = options.profile || options.workspace;
     const active = getActiveProfile(profileName);
     const client = new BelifoaClient(undefined, profileName);
     const teamKey = options.team || active?.defaultTeam;
     const query = options.query || "";
-    const issues = await client.searchIssues(query, {
+    const page = await client.searchIssuesPage(query, {
       teamKey,
-      limit: parseInt(options.limit)
+      limit: parseInt(options.limit),
+      after: options.after
     });
-    console.log(formatIssueList(issues, options.format, active));
+    console.log(formatSearchResult(page.issues, options.format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("my-issues").description("List issues assigned to you").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").action(async (options) => {
+program2.command("my-issues").description("List issues assigned to you").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Number of issues", "20").option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)").action(async (options) => {
   try {
     const profileName = options.profile || options.workspace;
     const active = getActiveProfile(profileName);
     const client = new BelifoaClient(undefined, profileName);
-    const issues = await client.getMyIssues(parseInt(options.limit));
-    const filtered = options.team ? issues.filter((i) => i.teamKey?.toLowerCase() === options.team.toLowerCase()) : issues;
-    console.log(formatIssueList(filtered, options.format, active));
+    const page = await client.getMyIssuesPage(parseInt(options.limit), { after: options.after });
+    const filtered = options.team ? page.issues.filter((i) => i.teamKey?.toLowerCase() === options.team.toLowerCase()) : page.issues;
+    console.log(formatSearchResult(filtered, options.format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 });
-program2.command("search <query>").description("Search Linear issues").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").action(async (query, options) => {
+program2.command("search <query>").description("Search Linear issues").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <key>", "Filter by team key (e.g., ENG)").option("-f, --format <format>", "Output format", "cli_table").option("-l, --limit <number>", "Limit results", "15").option("-a, --after <cursor>", "Cursor for the next page (from previous result footer)").action(async (query, options) => {
   try {
     const profileName = options.profile || options.workspace;
     const active = getActiveProfile(profileName);
     const client = new BelifoaClient(undefined, profileName);
     const teamKey = options.team || active?.defaultTeam;
-    const issues = await client.searchIssues(query, {
+    const page = await client.searchIssuesPage(query, {
       teamKey,
-      limit: parseInt(options.limit)
+      limit: parseInt(options.limit),
+      after: options.after
     });
-    console.log(formatIssueList(issues, options.format, active));
+    console.log(formatSearchResult(page.issues, options.format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active));
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);

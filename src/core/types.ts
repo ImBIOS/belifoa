@@ -59,6 +59,14 @@ export interface LinearIssue {
   children?: Array<{ id: string; identifier: string; title: string; status?: string; priority?: number }>;
   relations?: Array<{ id: string; type: string; relatedIssue: { id: string; identifier: string; title: string } }>;
   gitBranchName?: string;
+  matchScore?: number;
+  matchContext?: string;
+}
+
+export interface SearchPage {
+  issues: LinearIssue[];
+  hasNextPage: boolean;
+  endCursor?: string;
 }
 
 export interface CreateIssueParams {

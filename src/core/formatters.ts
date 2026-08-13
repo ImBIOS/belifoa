@@ -161,7 +161,8 @@ export function formatActiveProfileBanner(profile?: AuthProfile | null, format: 
 export function formatIssueList(
   issues: LinearIssue[],
   format: OutputFormat = "cli_table",
-  activeProfile?: AuthProfile | null
+  activeProfile?: AuthProfile | null,
+  meta?: { hasNextPage?: boolean; endCursor?: string }
 ): string {
   if (format === "raw_json") {
     return JSON.stringify(issues, null, 2);
@@ -176,6 +177,7 @@ export function formatIssueList(
         priority: i.priorityLabel,
         assignee: i.assignee || undefined,
         labels: i.labels?.length ? i.labels : undefined,
+        match: i.matchContext || undefined,
       }))
     );
   }
@@ -190,18 +192,21 @@ export function formatIssueList(
     const rows = issues.map((i) => {
       const assigneeStr = i.assignee ? `@${i.assignee}` : "-";
       const labelsStr = i.labels && i.labels.length > 0 ? `\`${i.labels.join(",")}\`` : "-";
-      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} |`;
+      const matchStr = i.matchContext ? i.matchContext.substring(0, 60) : "-";
+      return `| [${i.identifier}](${i.url || ""}) | ${i.title.replace(/\|/g, "\\|")} | **${i.status}** | ${i.priorityLabel} | ${assigneeStr} | ${labelsStr} | \`${matchStr}\` |`;
     });
 
     const content = [
       `Found ${issues.length} issue(s):`,
       "",
-      "| ID | Title | Status | Priority | Assignee | Labels |",
-      "|---|---|---|---|---|---|",
+      "| ID | Title | Status | Priority | Assignee | Labels | Match |",
+      "|---|---|---|---|---|---|---|",
       ...rows,
     ].join("\n");
 
-    return banner ? `${banner}\n${content}` : content;
+    const footer = formatPaginationFooter(issues.length, meta, "markdown");
+    const full = footer ? `${content}\n${footer}` : content;
+    return banner ? `${banner}\n${full}` : full;
   }
 
   // CLI Terminal Table Format
@@ -212,6 +217,7 @@ export function formatIssueList(
     priority: i.priorityLabel || "None",
     assignee: i.assignee ? `@${i.assignee}` : "-",
     labels: i.labels && i.labels.length > 0 ? i.labels.join(",") : "-",
+    match: i.matchContext ? i.matchContext.substring(0, 24) : "-",
   }));
 
   const maxId = Math.max(7, ...rows.map((r) => r.id.length));
@@ -219,12 +225,13 @@ export function formatIssueList(
   const maxStatus = Math.max(10, ...rows.map((r) => r.status.length));
   const maxPriority = Math.max(10, ...rows.map((r) => r.priority.length));
   const maxAssignee = Math.max(10, ...rows.map((r) => r.assignee.length));
+  const maxMatch = Math.max(5, ...rows.map((r) => r.match.length));
 
-  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}`;
-  const divider = `  ${"─".repeat(maxId)}  ${"─".repeat(maxTitle)}  ${"─".repeat(maxStatus)}  ${"─".repeat(maxPriority)}  ${"─".repeat(maxAssignee)}`;
+  const header = `  ${pad("ID", maxId)}  ${pad("TITLE", maxTitle)}  ${pad("STATUS", maxStatus)}  ${pad("PRIORITY", maxPriority)}  ${pad("ASSIGNEE", maxAssignee)}  ${pad("MATCH", maxMatch)}`;
+  const divider = `  ${"─".repeat(maxId)}  ${"─".repeat(maxTitle)}  ${"─".repeat(maxStatus)}  ${"─".repeat(maxPriority)}  ${"─".repeat(maxAssignee)}  ${"─".repeat(maxMatch)}`;
 
   const body = rows.map(
-    (r) => `  \x1b[1m\x1b[36m${pad(r.id, maxId)}\x1b[0m  ${pad(r.title, maxTitle)}  \x1b[32m${pad(r.status, maxStatus)}\x1b[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}`
+    (r) => `  \x1b[1m\x1b[36m${pad(r.id, maxId)}\x1b[0m  ${pad(r.title, maxTitle)}  \x1b[32m${pad(r.status, maxStatus)}\x1b[0m  ${pad(r.priority, maxPriority)}  ${pad(r.assignee, maxAssignee)}  \x1b[33m${pad(r.match, maxMatch)}\x1b[0m`
   );
 
   const content = [
@@ -235,7 +242,41 @@ export function formatIssueList(
     ...body,
   ].join("\n");
 
-  return maybeStripAnsi(banner ? `${banner}\n${content}` : content, format);
+  const footer = formatPaginationFooter(issues.length, meta, "cli_table");
+  const full = footer ? `${content}\n${footer}` : content;
+  return maybeStripAnsi(banner ? `${banner}\n${full}` : full, format);
+}
+
+function formatPaginationFooter(
+  shown: number,
+  meta?: { hasNextPage?: boolean; endCursor?: string },
+  format: OutputFormat = "cli_table"
+): string | undefined {
+  if (!meta?.hasNextPage) return undefined;
+  if (format === "markdown") {
+    return `> **Pagination**: ${shown} shown · more available · next cursor: \`${meta.endCursor || ""}\``;
+  }
+  return `\x1b[2mMore results available. Next page: --after ${meta.endCursor || "<cursor>"}\x1b[0m`;
+}
+
+/**
+ * Format search/list results including pagination meta (compact_json wraps with page info).
+ */
+export function formatSearchResult(
+  issues: LinearIssue[],
+  format: OutputFormat = "cli_table",
+  meta?: { hasNextPage?: boolean; endCursor?: string },
+  activeProfile?: AuthProfile | null
+): string {
+  if (format === "compact_json" && meta?.hasNextPage) {
+    return JSON.stringify({
+      count: issues.length,
+      hasNextPage: true,
+      endCursor: meta.endCursor,
+      issues: JSON.parse(formatIssueList(issues, "compact_json")),
+    });
+  }
+  return formatIssueList(issues, format, activeProfile, meta);
 }
 
 /**

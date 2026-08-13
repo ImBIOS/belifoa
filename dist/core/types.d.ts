@@ -71,6 +71,13 @@ export interface LinearIssue {
         };
     }>;
     gitBranchName?: string;
+    matchScore?: number;
+    matchContext?: string;
+}
+export interface SearchPage {
+    issues: LinearIssue[];
+    hasNextPage: boolean;
+    endCursor?: string;
 }
 export interface CreateIssueParams {
     teamIdOrKey: string;

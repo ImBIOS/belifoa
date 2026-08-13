@@ -98,6 +98,10 @@ export declare const searchIssuesToolSchema: {
                 default: number;
                 description: string;
             };
+            after: {
+                type: string;
+                description: string;
+            };
             format: {
                 type: string;
                 enum: string[];
@@ -120,6 +124,10 @@ export declare const getMyIssuesToolSchema: {
             limit: {
                 type: string;
                 default: number;
+            };
+            after: {
+                type: string;
+                description: string;
             };
             format: {
                 type: string;

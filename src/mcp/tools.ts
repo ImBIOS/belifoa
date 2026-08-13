@@ -9,6 +9,7 @@ import {
 import {
   formatIssueDetail,
   formatIssueList,
+  formatSearchResult,
   formatTeams,
   formatProjects,
   formatProfiles,
@@ -88,7 +89,8 @@ export const getIssueToolSchema = {
 
 export const searchIssuesToolSchema = {
   name: "belifoa_search_issues",
-  description: "Search Linear issues by keyword query, team, or status.",
+  description:
+    "Search Linear issues by keyword query, team, or status. Results are re-ranked by title/description/label/comment token overlap and each row shows which query tokens matched where (t:/d:/l:/c:). Supports cursor pagination via 'after'.",
   inputSchema: {
     type: "object",
     properties: {
@@ -99,6 +101,10 @@ export const searchIssuesToolSchema = {
       },
       teamKey: { type: "string", description: "Optional team key filter (e.g., 'ENG')" },
       limit: { type: "number", default: 15, description: "Maximum number of issues to return" },
+      after: {
+        type: "string",
+        description: "Cursor from a previous result's 'endCursor' to fetch the next page",
+      },
       format: {
         type: "string",
         enum: ["markdown", "compact_json", "raw_json"],
@@ -111,7 +117,8 @@ export const searchIssuesToolSchema = {
 
 export const getMyIssuesToolSchema = {
   name: "belifoa_get_my_issues",
-  description: "Get issues assigned to the authenticated user.",
+  description:
+    "Get issues assigned to the authenticated user. Supports cursor pagination via 'after'.",
   inputSchema: {
     type: "object",
     properties: {
@@ -120,6 +127,10 @@ export const getMyIssuesToolSchema = {
         description: "Target workspace profile name for parallel agent isolation. Defaults to active profile.",
       },
       limit: { type: "number", default: 20 },
+      after: {
+        type: "string",
+        description: "Cursor from a previous result's 'endCursor' to fetch the next page",
+      },
       format: {
         type: "string",
         enum: ["markdown", "compact_json", "raw_json"],
@@ -451,16 +462,17 @@ export async function handleToolCall(
 
       case "search_issues": {
         const teamKey = args.teamKey || active?.defaultTeam;
-        const issues = await targetClient.searchIssues(args.query || "", {
+        const page = await targetClient.searchIssuesPage(args.query || "", {
           teamKey,
           limit: args.limit,
+          after: args.after,
         });
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
 
       case "get_my_issues": {
-        const issues = await targetClient.getMyIssues(args.limit || 20);
-        return { content: [{ type: "text", text: formatIssueList(issues, format, active) }] };
+        const page = await targetClient.getMyIssuesPage(args.limit || 20, { after: args.after });
+        return { content: [{ type: "text", text: formatSearchResult(page.issues, format, { hasNextPage: page.hasNextPage, endCursor: page.endCursor }, active) }] };
       }
 
       case "manage_issue": {

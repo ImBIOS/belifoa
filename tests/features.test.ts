@@ -195,16 +195,19 @@ describe("Belifoa New Features Unit Tests", () => {
     expect(schemas.some((s) => s.name.includes("myrehat"))).toBe(false);
 
     const client = new BelifoaClient("fake-key", "myrehat");
-    client.getMyIssues = async () => [
-      {
-        id: "id-1",
-        identifier: "MYR-10",
-        title: "Monorepo tool namespacing bug",
-        status: "In Progress",
-        priority: 1,
-        priorityLabel: "Urgent 🔴",
-      },
-    ];
+    client.getMyIssuesPage = async () => ({
+      issues: [
+        {
+          id: "id-1",
+          identifier: "MYR-10",
+          title: "Monorepo tool namespacing bug",
+          status: "In Progress",
+          priority: 1,
+          priorityLabel: "Urgent 🔴",
+        },
+      ],
+      hasNextPage: false,
+    });
 
     // New unprefixed name resolves
     const result = await handleToolCall(

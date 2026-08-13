@@ -90,8 +90,11 @@ bun x github:ImBIOS/belifoa#canary auth status
 # List issues assigned to you
 bun x github:ImBIOS/belifoa#canary my-issues
 
-# Search issues by query and team
+# Search issues by query and team (relevance-ranked: rows show a Match column with t:/d:/l:/c: token hits; comments are indexed)
 bun x github:ImBIOS/belifoa#canary search "auth bug" --team ENG
+
+# Fetch the next page of results (cursor printed in the result footer)
+bun x github:ImBIOS/belifoa#canary search "auth bug" --team ENG --after <cursor>
 
 # Inspect issue details
 bun x github:ImBIOS/belifoa#canary issue ENG-123

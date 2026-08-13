@@ -19,6 +19,9 @@ Belifoa provides a high-performance, agent-friendly interface for Linear.
 - **Hierarchy & Relations**: Support for `parentId`, `blockedBy`, and `blocks` dependencies in issue CRUD and MCP tools.
 - **Batch Issue Operations**: Create multiple issues in a single API roundtrip via `belifoa_manage_issue({ action: "bulk_create", issues: [...] })`.
 - **Self-Correcting LLM Errors**: Structured JSON errors returning valid `availableTeams`, `availableStates`, `availableUsers`, and `availableProfiles` on invalid inputs so agents self-correct in 1 turn.
+- **Relevance-Ranked Search**: Search results are re-ranked by title/description/label/comment token overlap (not raw Linear ordering). Every row shows a `Match` column (`t:` title, `d:` description, `l:` labels, `c:` comments) so you can judge why each issue matched. Zero-overlap noise rows are dropped when real matches exist.
+- **Comment-Aware Search**: Issue comments are indexed for scoring, so issues discussed in comments surface in search even when the title/description don't contain the query.
+- **Cursor Pagination**: `search` / `list` / `my-issues` accept `-a, --after <cursor>`; results print a next-page cursor when more rows exist (MCP: `after` param). Compact JSON wraps as `{count, hasNextPage, endCursor, issues}` when more pages exist.
 
 ## Usage Modes
 
@@ -29,7 +32,7 @@ Agents can execute CLI commands directly in terminal using `bun x github:ImBIOS/
 # List my assigned issues
 bun x github:ImBIOS/belifoa#canary my-issues
 
-# Search issues
+# Search issues (relevance-ranked, Match column shows where tokens hit; add --after for next page)
 bun x github:ImBIOS/belifoa#canary search "login bug" --team ENG
 
 # Get detailed issue view
@@ -58,8 +61,8 @@ When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp` (or `... mcp 
 - `belifoa_auth_switch({ profileName: "playzuzu" })` — activate profile or default team
 - `belifoa_set_api_key({ apiKey: "lin_api_...", profileName: "playzuzu" })` — save new profile key
 - `belifoa_get_issue({ id: "ENG-123", format: "markdown" })`
-- `belifoa_search_issues({ query: "auth bug", teamKey: "ENG" })`
-- `belifoa_get_my_issues()`
+- `belifoa_search_issues({ query: "auth bug", teamKey: "ENG" })` — re-ranked; rows show `Match` (`t:`/`d:`/`l:`/`c:`); pass `after` from `endCursor` to page
+- `belifoa_get_my_issues({ after: "..." })` — cursor pagination supported
 - `belifoa_manage_issue({ action: "create", title: "Subtask fix", parentId: "ENG-100", blockedBy: ["ENG-99"] })`
 - `belifoa_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
 - `belifoa_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
