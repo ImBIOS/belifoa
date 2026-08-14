@@ -14003,6 +14003,8 @@ function buildMatchContext(match) {
 var TITLE_WEIGHT = 4, DESCRIPTION_WEIGHT = 2, LABEL_WEIGHT = 2, COMMENT_WEIGHT = 1, IDENTIFIER_WEIGHT = 8, COVERAGE_BONUS = 1, TITLE_PHRASE_BONUS = 10, DESCRIPTION_PHRASE_BONUS = 5, COMMENT_PHRASE_BONUS = 2;
 
 // src/core/client.ts
+import { randomUUID } from "crypto";
+
 class BelifoaClient {
   apiKey;
   profileName;
@@ -14473,7 +14475,8 @@ class BelifoaClient {
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
       labelIds,
-      parentId
+      parentId,
+      clientId: params.clientId ?? randomUUID()
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, { input });
@@ -14618,7 +14621,7 @@ class BelifoaClient {
     }
     return { created, errors: errors3 };
   }
-  async addComment(issueId, body) {
+  async addComment(issueId, body, clientId) {
     const mutation = `
       mutation CreateComment($input: CommentCreateInput!) {
         commentCreate(input: $input) {
@@ -14632,12 +14635,40 @@ class BelifoaClient {
       }
     `;
     const data = await this.graphql(mutation, {
-      input: { issueId, body }
+      input: { issueId, body, clientId: clientId ?? randomUUID() }
     });
     if (!data.commentCreate.success || !data.commentCreate.comment) {
       throw new Error(`Failed to create comment on issue ${issueId}`);
     }
     return data.commentCreate.comment;
+  }
+  async deleteComment(id) {
+    const mutation = `
+      mutation DeleteComment($id: String!) {
+        commentDelete(id: $id) {
+          success
+        }
+      }
+    `;
+    const data = await this.graphql(mutation, { id });
+    if (!data.commentDelete.success) {
+      throw new Error(`Failed to delete comment ${id}`);
+    }
+    return { id, success: true };
+  }
+  async archiveComment(id) {
+    const mutation = `
+      mutation ArchiveComment($id: String!) {
+        commentArchive(id: $id) {
+          success
+        }
+      }
+    `;
+    const data = await this.graphql(mutation, { id });
+    if (!data.commentArchive.success) {
+      throw new Error(`Failed to archive comment ${id}`);
+    }
+    return { id, success: true };
   }
   async getTeams() {
     const query = `
@@ -14876,7 +14907,8 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             state: i.state,
             parentId: i.parentId,
             blockedBy: i.blockedBy,
-            blocks: i.blocks
+            blocks: i.blocks,
+            clientId: i.clientId
           }));
           const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
           const parts = [];
@@ -14913,7 +14945,8 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
             parentId: args.parentId,
             blockedBy: args.blockedBy,
             blocks: args.blocks,
-            checkExisting: Boolean(args.checkExisting || args.idempotent)
+            checkExisting: Boolean(args.checkExisting || args.idempotent),
+            clientId: args.clientId
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -14937,7 +14970,7 @@ ${formatIssueDetail(created, format, active)}` }] };
             blocks: args.blocks
           });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody);
+            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
             return { content: [{ type: "text", text: `\u2705 Updated issue:
 
@@ -14952,7 +14985,7 @@ ${formatIssueDetail(updated, format, active)}` }] };
             throw new Error("issueId is required for 'close' or 'resolve'.");
           const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody);
+            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
           }
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
           return { content: [{ type: "text", text: `\u2705 Closed/Resolved issue ${args.issueId}:
@@ -14963,13 +14996,27 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await targetClient.addComment(args.issueId, args.commentBody);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
           return {
             content: [
               {
                 type: "text",
                 text: `\u2705 Added comment to ${args.issueId}:
 > ${comment.body}`
+              }
+            ]
+          };
+        }
+        if (args.action === "delete_comment" || args.action === "archive_comment") {
+          if (!args.commentId) {
+            throw new Error(`commentId is required for '${args.action}'.`);
+          }
+          const result = args.action === "delete_comment" ? await targetClient.deleteComment(args.commentId) : await targetClient.archiveComment(args.commentId);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `\u2705 ${args.action === "delete_comment" ? "Deleted" : "Archived"} comment ${result.id}`
               }
             ]
           };
@@ -15129,7 +15176,7 @@ var init_tools = __esm(() => {
       properties: {
         action: {
           type: "string",
-          enum: ["create", "update", "comment", "close", "resolve", "bulk_create"],
+          enum: ["create", "update", "comment", "close", "resolve", "delete_comment", "archive_comment", "bulk_create"],
           description: "Action to perform"
         },
         profileName: {
@@ -15137,6 +15184,7 @@ var init_tools = __esm(() => {
           description: "Target workspace profile name for parallel agent isolation. Defaults to active profile."
         },
         issueId: { type: "string", description: "Issue identifier for 'update', 'comment', 'close', or 'resolve' (e.g. ENG-123)" },
+        commentId: { type: "string", description: "Comment ID for 'delete_comment' or 'archive_comment' (get it from get_issue output or comments)" },
         teamKey: { type: "string", description: "Team key for 'create' (e.g. ENG). Uses default team if omitted." },
         title: { type: "string", description: "Issue title for 'create' or 'update'" },
         description: { type: "string", description: "Description text" },
@@ -15163,6 +15211,10 @@ var init_tools = __esm(() => {
           description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
         },
         commentBody: { type: "string", description: "Comment body text for 'comment', 'close', 'resolve', or 'update'" },
+        clientId: {
+          type: "string",
+          description: "Stable id for retry idempotency. Pass the same clientId when retrying a failed 'create' or 'comment' call so Linear dedupes it instead of duplicating the issue/comment."
+        },
         checkExisting: {
           type: "boolean",
           description: "If true, check if an issue with the same title exists in the team before creating"
@@ -15184,7 +15236,8 @@ var init_tools = __esm(() => {
               state: { type: "string", description: "Initial workflow state name or ID" },
               parentId: { type: "string", description: "Parent issue ID or identifier" },
               blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
-              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
+              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" },
+              clientId: { type: "string", description: "Stable id for retry idempotency (Linear dedupes creates with the same clientId)" }
             },
             required: ["title"]
           },

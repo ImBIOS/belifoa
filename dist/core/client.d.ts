@@ -109,11 +109,25 @@ export declare class BelifoaClient {
         }>;
     }>;
     /**
-     * Add comment to an issue
+     * Add comment to an issue. Pass a stable clientId to make retries idempotent.
      */
-    addComment(issueId: string, body: string): Promise<{
+    addComment(issueId: string, body: string, clientId?: string): Promise<{
         id: string;
         body: string;
+    }>;
+    /**
+     * Delete a comment by ID
+     */
+    deleteComment(id: string): Promise<{
+        id: string;
+        success: boolean;
+    }>;
+    /**
+     * Archive a comment by ID (soft delete, keeps history)
+     */
+    archiveComment(id: string): Promise<{
+        id: string;
+        success: boolean;
     }>;
     /**
      * Get all teams

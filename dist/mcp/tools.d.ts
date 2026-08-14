@@ -156,6 +156,10 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
+            commentId: {
+                type: string;
+                description: string;
+            };
             teamKey: {
                 type: string;
                 description: string;
@@ -219,6 +223,10 @@ export declare const manageIssueToolSchema: {
                 description: string;
             };
             commentBody: {
+                type: string;
+                description: string;
+            };
+            clientId: {
                 type: string;
                 description: string;
             };
@@ -291,6 +299,10 @@ export declare const manageIssueToolSchema: {
                             items: {
                                 type: string;
                             };
+                            description: string;
+                        };
+                        clientId: {
+                            type: string;
                             description: string;
                         };
                     };

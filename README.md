@@ -117,6 +117,10 @@ bun x github:ImBIOS/belifoa#canary update ENG-123 --state "In Progress" --assign
 # Close or resolve an issue
 bun x github:ImBIOS/belifoa#canary close ENG-123 -c "Fixed in PR #42"
 
+# Delete / archive a comment by ID (id is shown in `issue` comment output)
+bun x github:ImBIOS/belifoa#canary comment delete <comment-id>
+bun x github:ImBIOS/belifoa#canary comment archive <comment-id>
+
 # List active team labels
 bun x github:ImBIOS/belifoa#canary labels
 

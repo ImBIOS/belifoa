@@ -64,7 +64,11 @@ When MCP is connected via `bun x github:ImBIOS/belifoa#canary mcp` (or `... mcp 
 - `belifoa_search_issues({ query: "auth bug", teamKey: "ENG" })` — re-ranked; rows show `Match` (`t:`/`d:`/`l:`/`c:`); pass `after` from `endCursor` to page
 - `belifoa_get_my_issues({ after: "..." })` — cursor pagination supported
 - `belifoa_manage_issue({ action: "create", title: "Subtask fix", parentId: "ENG-100", blockedBy: ["ENG-99"] })`
+- `belifoa_manage_issue({ action: "create", title: "...", clientId: "..." })` — stable `clientId` makes retries idempotent (Linear dedupes creates/comments with the same clientId); reuse the same id if retrying a failed call
+- `belifoa_manage_issue({ action: "comment", issueId: "ENG-123", commentBody: "..." })` — `clientId` also supported
 - `belifoa_manage_issue({ action: "update", issueId: "ENG-123", state: "In Progress" })`
 - `belifoa_manage_issue({ action: "close", issueId: "ENG-123", commentBody: "Fixed in PR #42" })`
-- `belifoa_manage_issue({ action: "bulk_create", issues: [{ title: "Task 1" }, { title: "Task 2" }] })`
+- `belifoa_manage_issue({ action: "delete_comment", commentId: "..." })` — permanently delete a comment (id from `belifoa_get_issue` comments)
+- `belifoa_manage_issue({ action: "archive_comment", commentId: "..." })` — soft-delete, keeps history
+- `belifoa_manage_issue({ action: "bulk_create", issues: [{ title: "Task 1" }, { title: "Task 2" }] })` — per-item `clientId` supported
 - `belifoa_get_workspace()` — teams, projects, and labels in one call
