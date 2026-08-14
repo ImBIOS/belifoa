@@ -1,6 +1,23 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { BelifoaClient } from "../src/core/client.js";
 import { cleanRawIssue } from "../src/core/formatters.js";
+import { saveConfig } from "../src/core/config.js";
+
+const TEST_CONFIG_DIR = "/tmp/belifoa-unit-tests-client";
+
+beforeAll(() => {
+  process.env.BELIFOA_CONFIG_DIR = TEST_CONFIG_DIR;
+  saveConfig({
+    activeProfile: "test",
+    profiles: {
+      test: { name: "test", apiKey: "lin_api_fresh_key" },
+    },
+  });
+});
+
+afterAll(() => {
+  delete process.env.BELIFOA_CONFIG_DIR;
+});
 
 describe("BelifoaClient & Formatter Extensions", () => {
   it("cleans raw issue with estimate, dueDate, and labels", () => {
@@ -46,5 +63,114 @@ describe("BelifoaClient & Formatter Extensions", () => {
 
     const id2 = await client.resolveUserId("@me");
     expect(id2).toBe("user-me-123");
+  });
+
+  it("hoists clientId out of the input for issueCreate (top-level mutation argument)", async () => {
+    const client = new BelifoaClient("fake-key");
+    client.getTeams = async () => [{ id: "team-1", name: "Engineering", key: "ENG" }];
+    let capturedQuery = "";
+    let capturedVariables: any = {};
+    client["graphql"] = async (queryStr: string, variables: any) => {
+      capturedQuery = queryStr;
+      capturedVariables = variables;
+      return {
+        issueCreate: {
+          success: true,
+          issue: { id: "i1", identifier: "ENG-1", title: "Test", priority: 0 },
+        },
+      } as any;
+    };
+
+    await client.createIssue({ teamIdOrKey: "ENG", title: "Test", clientId: "client-abc-123" });
+
+    expect(capturedQuery).toContain("mutation CreateIssue($input: IssueCreateInput!, $clientId: String)");
+    expect(capturedQuery).toContain("issueCreate(input: $input, clientId: $clientId)");
+    expect(capturedVariables.input).not.toHaveProperty("clientId");
+    expect(capturedVariables.clientId).toBe("client-abc-123");
+  });
+
+  it("hoists clientId out of the input for commentCreate (top-level mutation argument)", async () => {
+    const client = new BelifoaClient("fake-key");
+    let capturedQuery = "";
+    let capturedVariables: any = {};
+    client["graphql"] = async (queryStr: string, variables: any) => {
+      capturedQuery = queryStr;
+      capturedVariables = variables;
+      return { commentCreate: { success: true, comment: { id: "c1", body: "hi", createdAt: "x" } } } as any;
+    };
+
+    await client.addComment("issue-1", "hi", "comment-client-1");
+
+    expect(capturedQuery).toContain("mutation CreateComment($input: CommentCreateInput!, $clientId: String)");
+    expect(capturedQuery).toContain("commentCreate(input: $input, clientId: $clientId)");
+    expect(capturedVariables.input).not.toHaveProperty("clientId");
+    expect(capturedVariables.clientId).toBe("comment-client-1");
+  });
+
+  it("errors instead of silently dropping unresolved label names", async () => {
+    const client = new BelifoaClient("fake-key");
+    client.getIssueLabels = async () => [
+      { id: "lbl-bug", name: "Bug" },
+      { id: "lbl-sec", name: "Security" },
+    ];
+
+    const err: any = await client
+      .resolveLabelIds("bug,security,typo-label")
+      .then(() => null)
+      .catch((e) => e);
+
+    expect(err).not.toBeNull();
+    expect(err.message).toContain("typo-label");
+    expect(err.suggestions.availableLabels).toContain("Bug");
+    expect(err.suggestions.availableLabels).toContain("Security");
+  });
+
+  it("re-reads config from disk and retries once when the API rejects with 401", async () => {
+    const client = new BelifoaClient("lin_api_stale_key", "test");
+    let calls = 0;
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () => {
+      calls++;
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify({ errors: [{ message: "Authentication required, not authenticated" }] }),
+          { status: 401 }
+        );
+      }
+      return new Response(
+        JSON.stringify({ data: { viewer: { id: "u1", name: "Fresh User", email: "fresh@example.com" } } }),
+        { status: 200 }
+      );
+    }) as typeof fetch;
+
+    try {
+      const me = await client.getMe();
+      expect(me.id).toBe("u1");
+      expect(calls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not retry when the refreshed key is unchanged (key still invalid)", async () => {
+    const client = new BelifoaClient("lin_api_fresh_key", "test");
+    let calls = 0;
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response(
+        JSON.stringify({ errors: [{ message: "Authentication required, not authenticated" }] }),
+        { status: 401 }
+      );
+    }) as typeof fetch;
+
+    try {
+      await expect(client.getMe()).rejects.toThrow("401");
+      expect(calls).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -37,7 +37,23 @@ export class BelifoaClient {
     return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
   }
 
-  private async graphql<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
+  /**
+   * Re-read the API key from disk config. Returns true if a different key was loaded.
+   */
+  public refreshApiKey(): boolean {
+    const fresh = getActiveProfile(this.profileName)?.apiKey || "";
+    if (fresh && fresh !== this.apiKey) {
+      this.apiKey = fresh;
+      return true;
+    }
+    return false;
+  }
+
+  private async graphql<T>(
+    query: string,
+    variables: Record<string, any> = {},
+    refreshed = false
+  ): Promise<T> {
     if (!this.apiKey) {
       this.apiKey = getActiveProfile(this.profileName)?.apiKey || "";
     }
@@ -59,13 +75,24 @@ export class BelifoaClient {
 
     if (!res.ok) {
       const text = await res.text();
+      if (!refreshed && (res.status === 401 || /authentication|unauthor|401/i.test(text))) {
+        if (this.refreshApiKey()) {
+          return this.graphql<T>(query, variables, true);
+        }
+      }
       throw new Error(`Linear API HTTP Error ${res.status}: ${text}`);
     }
 
     const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
 
     if (json.errors && json.errors.length > 0) {
-      throw new Error(`Linear GraphQL Error: ${json.errors.map((e) => e.message).join(", ")}`);
+      const message = json.errors.map((e) => e.message).join(", ");
+      if (!refreshed && /authentication|unauthor|invalid.*api ?key/i.test(message)) {
+        if (this.refreshApiKey()) {
+          return this.graphql<T>(query, variables, true);
+        }
+      }
+      throw new Error(`Linear GraphQL Error: ${message}`);
     }
 
     if (!json.data) {
@@ -308,9 +335,20 @@ export class BelifoaClient {
 
     if (unresolvedNames.length > 0) {
       const allLabels = await this.getIssueLabels();
+      const stillUnresolved: string[] = [];
       for (const name of unresolvedNames) {
         const match = allLabels.find((l) => l.id === name || l.name.toLowerCase() === name);
-        if (match) resultIds.push(match.id);
+        if (match) {
+          resultIds.push(match.id);
+        } else {
+          stillUnresolved.push(name);
+        }
+      }
+      if (stillUnresolved.length > 0) {
+        throw new BelifoaSuggestionError(`Label(s) not found in workspace: ${stillUnresolved.join(", ")}`, {
+          error: `Labels not found: ${stillUnresolved.join(", ")}`,
+          availableLabels: allLabels.map((l) => l.name),
+        });
       }
     }
 
@@ -590,8 +628,8 @@ export class BelifoaClient {
     const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
 
     const mutation = `
-      mutation CreateIssue($input: IssueCreateInput!) {
-        issueCreate(input: $input) {
+      mutation CreateIssue($input: IssueCreateInput!, $clientId: String) {
+        issueCreate(input: $input, clientId: $clientId) {
           success
           issue {
             id
@@ -628,12 +666,14 @@ export class BelifoaClient {
       dueDate: params.dueDate,
       labelIds,
       parentId,
-      clientId: params.clientId ?? randomUUID(),
     };
 
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
 
-    const data = await this.graphql<{ issueCreate: { success: boolean; issue: any } }>(mutation, { input });
+    const data = await this.graphql<{ issueCreate: { success: boolean; issue: any } }>(mutation, {
+      input,
+      clientId: params.clientId ?? randomUUID(),
+    });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
     }
@@ -812,8 +852,8 @@ export class BelifoaClient {
     clientId?: string
   ): Promise<{ id: string; body: string }> {
     const mutation = `
-      mutation CreateComment($input: CommentCreateInput!) {
-        commentCreate(input: $input) {
+      mutation CreateComment($input: CommentCreateInput!, $clientId: String) {
+        commentCreate(input: $input, clientId: $clientId) {
           success
           comment {
             id
@@ -825,7 +865,8 @@ export class BelifoaClient {
     `;
 
     const data = await this.graphql<{ commentCreate: { success: boolean; comment: any } }>(mutation, {
-      input: { issueId, body, clientId: clientId ?? randomUUID() },
+      input: { issueId, body },
+      clientId: clientId ?? randomUUID(),
     });
 
     if (!data.commentCreate.success || !data.commentCreate.comment) {

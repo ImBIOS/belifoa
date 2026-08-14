@@ -409,12 +409,16 @@ describe("Belifoa New Features Unit Tests", () => {
     };
 
     await client.createIssue({ teamIdOrKey: "ZUZ", title: "Idem" });
-    const createInput = mutations[0].variables.input;
-    expect(typeof createInput.clientId).toBe("string");
-    expect(createInput.clientId.length).toBeGreaterThan(0);
+    const createVariables = mutations[0].variables;
+    expect(createVariables.input.clientId).toBeUndefined();
+    expect(typeof createVariables.clientId).toBe("string");
+    expect(createVariables.clientId.length).toBeGreaterThan(0);
+    expect(mutations[0].query).toContain("issueCreate(input: $input, clientId: $clientId)");
 
     await client.addComment("i-1", "hello", "stable-comment-id");
-    expect(mutations[1].variables.input.clientId).toBe("stable-comment-id");
+    expect(mutations[1].variables.input.clientId).toBeUndefined();
+    expect(mutations[1].variables.clientId).toBe("stable-comment-id");
+    expect(mutations[1].query).toContain("commentCreate(input: $input, clientId: $clientId)");
   });
 
   it("10. deleteComment and archiveComment hit commentDelete/commentArchive", async () => {
