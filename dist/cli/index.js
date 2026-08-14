@@ -15263,7 +15263,7 @@ var init_package = __esm(() => {
       "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
       prepare: "bun run build",
       dev: "bun run src/cli/index.ts",
-      mcp: "bun run src/mcp/server.ts",
+      mcp: "bun run src/cli/index.ts mcp",
       test: "bun test",
       benchmark: "bun run benchmark/runner.ts"
     },
@@ -15348,12 +15348,6 @@ var init_server3 = __esm(() => {
   init_client();
   init_tools();
   init_package();
-  if (import.meta.main) {
-    startMcpServer().catch((err) => {
-      console.error("Belifoa MCP Server Error:", err);
-      process.exit(1);
-    });
-  }
 });
 
 // node_modules/.pnpm/commander@13.1.0/node_modules/commander/lib/error.js

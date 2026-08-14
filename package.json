@@ -18,7 +18,7 @@
     "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
     "prepare": "bun run build",
     "dev": "bun run src/cli/index.ts",
-    "mcp": "bun run src/mcp/server.ts",
+    "mcp": "bun run src/cli/index.ts mcp",
     "test": "bun test",
     "benchmark": "bun run benchmark/runner.ts"
   },

@@ -47,10 +47,3 @@ export async function startMcpServer(profileName?: string) {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
-
-if (import.meta.main) {
-  startMcpServer().catch((err) => {
-    console.error("Belifoa MCP Server Error:", err);
-    process.exit(1);
-  });
-}
