@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { loadConfig, getActiveProfile } from "./config.js";
 import { cleanRawIssue } from "./formatters.js";
 import {
@@ -627,6 +628,7 @@ export class BelifoaClient {
       dueDate: params.dueDate,
       labelIds,
       parentId,
+      clientId: params.clientId ?? randomUUID(),
     };
 
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
@@ -802,9 +804,13 @@ export class BelifoaClient {
   }
 
   /**
-   * Add comment to an issue
+   * Add comment to an issue. Pass a stable clientId to make retries idempotent.
    */
-  async addComment(issueId: string, body: string): Promise<{ id: string; body: string }> {
+  async addComment(
+    issueId: string,
+    body: string,
+    clientId?: string
+  ): Promise<{ id: string; body: string }> {
     const mutation = `
       mutation CreateComment($input: CommentCreateInput!) {
         commentCreate(input: $input) {
@@ -819,7 +825,7 @@ export class BelifoaClient {
     `;
 
     const data = await this.graphql<{ commentCreate: { success: boolean; comment: any } }>(mutation, {
-      input: { issueId, body },
+      input: { issueId, body, clientId: clientId ?? randomUUID() },
     });
 
     if (!data.commentCreate.success || !data.commentCreate.comment) {
@@ -827,6 +833,44 @@ export class BelifoaClient {
     }
 
     return data.commentCreate.comment;
+  }
+
+  /**
+   * Delete a comment by ID
+   */
+  async deleteComment(id: string): Promise<{ id: string; success: boolean }> {
+    const mutation = `
+      mutation DeleteComment($id: String!) {
+        commentDelete(id: $id) {
+          success
+        }
+      }
+    `;
+
+    const data = await this.graphql<{ commentDelete: { success: boolean } }>(mutation, { id });
+    if (!data.commentDelete.success) {
+      throw new Error(`Failed to delete comment ${id}`);
+    }
+    return { id, success: true };
+  }
+
+  /**
+   * Archive a comment by ID (soft delete, keeps history)
+   */
+  async archiveComment(id: string): Promise<{ id: string; success: boolean }> {
+    const mutation = `
+      mutation ArchiveComment($id: String!) {
+        commentArchive(id: $id) {
+          success
+        }
+      }
+    `;
+
+    const data = await this.graphql<{ commentArchive: { success: boolean } }>(mutation, { id });
+    if (!data.commentArchive.success) {
+      throw new Error(`Failed to archive comment ${id}`);
+    }
+    return { id, success: true };
   }
 
   /**

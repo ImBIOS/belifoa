@@ -417,6 +417,7 @@ program
   .option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue")
   .option("--check-existing", "Check if issue with same title exists in team before creating")
   .option("--idempotent", "Check if issue with same title exists in team before creating (alias)")
+  .option("--client-id <id>", "Stable id for retry idempotency (Linear dedupes creates with the same clientId)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -446,6 +447,7 @@ program
         blockedBy: options.blockedBy,
         blocks: options.blocks,
         checkExisting: Boolean(options.checkExisting || options.idempotent),
+        clientId: options.clientId,
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat, active));
     } catch (err: any) {
@@ -658,6 +660,45 @@ program
       console.log(formatProjects(projects, options.format as OutputFormat, active));
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Comment management command
+const commentCmd = program
+  .command("comment")
+  .description("Manage comments on Linear issues (delete/archive)");
+
+commentCmd
+  .command("delete <id>")
+  .description("Delete a comment by ID")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("-w, --workspace <profile>", "Target workspace profile (alias)")
+  .action(async (id: string, options) => {
+    try {
+      const profileName = options.profile || options.workspace;
+      const client = new BelifoaClient(undefined, profileName);
+      await client.deleteComment(id);
+      console.log(`✅ Deleted comment ${id}`);
+    } catch (err: any) {
+      console.error(`Error deleting comment ${id}: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+commentCmd
+  .command("archive <id>")
+  .description("Archive a comment by ID (soft delete, keeps history)")
+  .option("-p, --profile <profile>", "Target workspace profile")
+  .option("-w, --workspace <profile>", "Target workspace profile (alias)")
+  .action(async (id: string, options) => {
+    try {
+      const profileName = options.profile || options.workspace;
+      const client = new BelifoaClient(undefined, profileName);
+      await client.archiveComment(id);
+      console.log(`✅ Archived comment ${id}`);
+    } catch (err: any) {
+      console.error(`Error archiving comment ${id}: ${err.message}`);
       process.exit(1);
     }
   });

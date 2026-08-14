@@ -84,6 +84,7 @@ export interface CreateIssueParams {
   blockedBy?: string[] | string; // Issue ID(s) or identifier(s) that block this issue
   blocks?: string[] | string; // Issue ID(s) or identifier(s) that this issue blocks
   checkExisting?: boolean; // If true, check if issue with same title exists in team before creating
+  clientId?: string; // Stable id for retry idempotency (Linear dedupes creates with the same clientId)
 }
 
 export interface UpdateIssueParams {
