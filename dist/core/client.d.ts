@@ -6,6 +6,10 @@ export declare class BelifoaClient {
     setApiKey(key: string): void;
     getProfileName(): string | undefined;
     getApiKey(): string;
+    /**
+     * Re-read the API key from disk config. Returns true if a different key was loaded.
+     */
+    refreshApiKey(): boolean;
     private graphql;
     /**
      * Get authenticated user info

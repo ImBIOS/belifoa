@@ -1003,7 +1003,15 @@ class BelifoaClient {
   getApiKey() {
     return this.apiKey || getActiveProfile(this.profileName)?.apiKey || "";
   }
-  async graphql(query, variables = {}) {
+  refreshApiKey() {
+    const fresh = getActiveProfile(this.profileName)?.apiKey || "";
+    if (fresh && fresh !== this.apiKey) {
+      this.apiKey = fresh;
+      return true;
+    }
+    return false;
+  }
+  async graphql(query, variables = {}, refreshed = false) {
     if (!this.apiKey) {
       this.apiKey = getActiveProfile(this.profileName)?.apiKey || "";
     }
@@ -1020,11 +1028,22 @@ class BelifoaClient {
     });
     if (!res.ok) {
       const text = await res.text();
+      if (!refreshed && (res.status === 401 || /authentication|unauthor|401/i.test(text))) {
+        if (this.refreshApiKey()) {
+          return this.graphql(query, variables, true);
+        }
+      }
       throw new Error(`Linear API HTTP Error ${res.status}: ${text}`);
     }
     const json = await res.json();
     if (json.errors && json.errors.length > 0) {
-      throw new Error(`Linear GraphQL Error: ${json.errors.map((e) => e.message).join(", ")}`);
+      const message = json.errors.map((e) => e.message).join(", ");
+      if (!refreshed && /authentication|unauthor|invalid.*api ?key/i.test(message)) {
+        if (this.refreshApiKey()) {
+          return this.graphql(query, variables, true);
+        }
+      }
+      throw new Error(`Linear GraphQL Error: ${message}`);
     }
     if (!json.data) {
       throw new Error("Linear GraphQL returned no data.");
@@ -1196,10 +1215,20 @@ class BelifoaClient {
     }
     if (unresolvedNames.length > 0) {
       const allLabels = await this.getIssueLabels();
+      const stillUnresolved = [];
       for (const name of unresolvedNames) {
         const match = allLabels.find((l) => l.id === name || l.name.toLowerCase() === name);
-        if (match)
+        if (match) {
           resultIds.push(match.id);
+        } else {
+          stillUnresolved.push(name);
+        }
+      }
+      if (stillUnresolved.length > 0) {
+        throw new BelifoaSuggestionError(`Label(s) not found in workspace: ${stillUnresolved.join(", ")}`, {
+          error: `Labels not found: ${stillUnresolved.join(", ")}`,
+          availableLabels: allLabels.map((l) => l.name)
+        });
       }
     }
     return resultIds;
@@ -1421,8 +1450,8 @@ class BelifoaClient {
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
     const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
     const mutation = `
-      mutation CreateIssue($input: IssueCreateInput!) {
-        issueCreate(input: $input) {
+      mutation CreateIssue($input: IssueCreateInput!, $clientId: String) {
+        issueCreate(input: $input, clientId: $clientId) {
           success
           issue {
             id
@@ -1457,11 +1486,13 @@ class BelifoaClient {
       estimate: params.estimate !== undefined ? Number(params.estimate) : undefined,
       dueDate: params.dueDate,
       labelIds,
-      parentId,
-      clientId: params.clientId ?? randomUUID()
+      parentId
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
-    const data = await this.graphql(mutation, { input });
+    const data = await this.graphql(mutation, {
+      input,
+      clientId: params.clientId ?? randomUUID()
+    });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
     }
@@ -1605,8 +1636,8 @@ class BelifoaClient {
   }
   async addComment(issueId, body, clientId) {
     const mutation = `
-      mutation CreateComment($input: CommentCreateInput!) {
-        commentCreate(input: $input) {
+      mutation CreateComment($input: CommentCreateInput!, $clientId: String) {
+        commentCreate(input: $input, clientId: $clientId) {
           success
           comment {
             id
@@ -1617,7 +1648,8 @@ class BelifoaClient {
       }
     `;
     const data = await this.graphql(mutation, {
-      input: { issueId, body, clientId: clientId ?? randomUUID() }
+      input: { issueId, body },
+      clientId: clientId ?? randomUUID()
     });
     if (!data.commentCreate.success || !data.commentCreate.comment) {
       throw new Error(`Failed to create comment on issue ${issueId}`);
