@@ -387,7 +387,7 @@ describe("Belifoa New Features Unit Tests", () => {
     expect(mutationCalled).toBe(false);
   });
 
-  it("9. createIssue and addComment send clientId for retry idempotency", async () => {
+  it("9. createIssue and addComment omit clientId from mutations (Linear schema regression guard)", async () => {
     const client = new BelifoaClient("fake-key");
     client.getTeams = async () => [{ id: "t-zuz", key: "ZUZ", name: "ZuZu" }];
 
@@ -410,15 +410,18 @@ describe("Belifoa New Features Unit Tests", () => {
 
     await client.createIssue({ teamIdOrKey: "ZUZ", title: "Idem" });
     const createVariables = mutations[0].variables;
-    expect(createVariables.input.clientId).toBeUndefined();
-    expect(typeof createVariables.clientId).toBe("string");
-    expect(createVariables.clientId.length).toBeGreaterThan(0);
-    expect(mutations[0].query).toContain("issueCreate(input: $input, clientId: $clientId)");
+    expect(mutations[0].query).toContain("mutation CreateIssue($input: IssueCreateInput!)");
+    expect(mutations[0].query).toContain("issueCreate(input: $input)");
+    expect(mutations[0].query).not.toContain("clientId");
+    expect(createVariables).not.toHaveProperty("clientId");
+    expect(createVariables.input).not.toHaveProperty("clientId");
 
-    await client.addComment("i-1", "hello", "stable-comment-id");
-    expect(mutations[1].variables.input.clientId).toBeUndefined();
-    expect(mutations[1].variables.clientId).toBe("stable-comment-id");
-    expect(mutations[1].query).toContain("commentCreate(input: $input, clientId: $clientId)");
+    await client.addComment("i-1", "hello");
+    expect(mutations[1].query).toContain("mutation CreateComment($input: CommentCreateInput!)");
+    expect(mutations[1].query).toContain("commentCreate(input: $input)");
+    expect(mutations[1].query).not.toContain("clientId");
+    expect(mutations[1].variables).not.toHaveProperty("clientId");
+    expect(mutations[1].variables.input).not.toHaveProperty("clientId");
   });
 
   it("10. deleteComment and archiveComment hit commentDelete/commentArchive", async () => {
@@ -438,11 +441,11 @@ describe("Belifoa New Features Unit Tests", () => {
     expect(queries[1]).toContain("commentArchive");
   });
 
-  it("11. handleToolCall supports delete_comment/archive_comment actions and clientId passthrough", async () => {
+  it("11. handleToolCall supports delete_comment/archive_comment actions and ignores stray clientId args", async () => {
     const client = new BelifoaClient("fake-key");
     let deleteCalled = false;
     let archiveCalled = false;
-    let passedClientId: string | undefined;
+    let commentArgs: any = null;
     client.deleteComment = async () => {
       deleteCalled = true;
       return { id: "c-1", success: true };
@@ -451,8 +454,8 @@ describe("Belifoa New Features Unit Tests", () => {
       archiveCalled = true;
       return { id: "c-2", success: true };
     };
-    client.addComment = async (issueId: string, body: string, clientId?: string) => {
-      passedClientId = clientId;
+    client.addComment = async (issueId: string, body: string) => {
+      commentArgs = { issueId, body };
       return { id: "c-3", body };
     };
 
@@ -467,6 +470,6 @@ describe("Belifoa New Features Unit Tests", () => {
       { action: "comment", issueId: "ENG-1", commentBody: "hi", clientId: "retry-safe" },
       client
     );
-    expect(passedClientId).toBe("retry-safe");
+    expect(commentArgs).toEqual({ issueId: "ENG-1", body: "hi" });
   });
 });

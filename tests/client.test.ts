@@ -65,7 +65,7 @@ describe("BelifoaClient & Formatter Extensions", () => {
     expect(id2).toBe("user-me-123");
   });
 
-  it("hoists clientId out of the input for issueCreate (top-level mutation argument)", async () => {
+  it("issueCreate mutation omits clientId (Linear schema regression guard)", async () => {
     const client = new BelifoaClient("fake-key");
     client.getTeams = async () => [{ id: "team-1", name: "Engineering", key: "ENG" }];
     let capturedQuery = "";
@@ -81,15 +81,16 @@ describe("BelifoaClient & Formatter Extensions", () => {
       } as any;
     };
 
-    await client.createIssue({ teamIdOrKey: "ENG", title: "Test", clientId: "client-abc-123" });
+    await client.createIssue({ teamIdOrKey: "ENG", title: "Test" });
 
-    expect(capturedQuery).toContain("mutation CreateIssue($input: IssueCreateInput!, $clientId: String)");
-    expect(capturedQuery).toContain("issueCreate(input: $input, clientId: $clientId)");
+    expect(capturedQuery).toContain("mutation CreateIssue($input: IssueCreateInput!)");
+    expect(capturedQuery).toContain("issueCreate(input: $input)");
+    expect(capturedQuery).not.toContain("clientId");
+    expect(capturedVariables).not.toHaveProperty("clientId");
     expect(capturedVariables.input).not.toHaveProperty("clientId");
-    expect(capturedVariables.clientId).toBe("client-abc-123");
   });
 
-  it("hoists clientId out of the input for commentCreate (top-level mutation argument)", async () => {
+  it("commentCreate mutation omits clientId (Linear schema regression guard)", async () => {
     const client = new BelifoaClient("fake-key");
     let capturedQuery = "";
     let capturedVariables: any = {};
@@ -99,12 +100,13 @@ describe("BelifoaClient & Formatter Extensions", () => {
       return { commentCreate: { success: true, comment: { id: "c1", body: "hi", createdAt: "x" } } } as any;
     };
 
-    await client.addComment("issue-1", "hi", "comment-client-1");
+    await client.addComment("issue-1", "hi");
 
-    expect(capturedQuery).toContain("mutation CreateComment($input: CommentCreateInput!, $clientId: String)");
-    expect(capturedQuery).toContain("commentCreate(input: $input, clientId: $clientId)");
+    expect(capturedQuery).toContain("mutation CreateComment($input: CommentCreateInput!)");
+    expect(capturedQuery).toContain("commentCreate(input: $input)");
+    expect(capturedQuery).not.toContain("clientId");
+    expect(capturedVariables).not.toHaveProperty("clientId");
     expect(capturedVariables.input).not.toHaveProperty("clientId");
-    expect(capturedVariables.clientId).toBe("comment-client-1");
   });
 
   it("errors instead of silently dropping unresolved label names", async () => {
