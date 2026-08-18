@@ -15319,7 +15319,7 @@ var package_default;
 var init_package = __esm(() => {
   package_default = {
     name: "belifoa",
-    version: "0.7.1",
+    version: "0.7.2",
     description: "\u26A1 High-performance, compact Linear client & MCP server for AI agents. Reduces prompt context payload by 70\u201380% with persistent auth, CLI, skills & git hooks.",
     main: "./dist/index.js",
     module: "./dist/index.js",
