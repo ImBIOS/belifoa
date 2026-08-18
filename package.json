@@ -17,6 +17,7 @@
     "build:binary": "bun build --compile --outfile=dist/belifoa src/cli/index.ts",
     "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
     "prepare": "bun run build",
+    "postinstall": "lefthook install",
     "dev": "bun run src/cli/index.ts",
     "mcp": "bun run src/cli/index.ts mcp",
     "test": "bun test",
@@ -52,6 +53,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^22.10.2",
+    "lefthook": "^2.1.10",
     "typescript": "^5.7.2"
   }
 }
