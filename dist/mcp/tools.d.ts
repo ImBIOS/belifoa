@@ -226,10 +226,6 @@ export declare const manageIssueToolSchema: {
                 type: string;
                 description: string;
             };
-            clientId: {
-                type: string;
-                description: string;
-            };
             checkExisting: {
                 type: string;
                 description: string;
@@ -299,10 +295,6 @@ export declare const manageIssueToolSchema: {
                             items: {
                                 type: string;
                             };
-                            description: string;
-                        };
-                        clientId: {
-                            type: string;
                             description: string;
                         };
                     };

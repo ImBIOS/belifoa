@@ -113,9 +113,9 @@ export declare class BelifoaClient {
         }>;
     }>;
     /**
-     * Add comment to an issue. Pass a stable clientId to make retries idempotent.
+     * Add comment to an issue.
      */
-    addComment(issueId: string, body: string, clientId?: string): Promise<{
+    addComment(issueId: string, body: string): Promise<{
         id: string;
         body: string;
     }>;

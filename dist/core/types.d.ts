@@ -94,7 +94,6 @@ export interface CreateIssueParams {
     blockedBy?: string[] | string;
     blocks?: string[] | string;
     checkExisting?: boolean;
-    clientId?: string;
 }
 export interface UpdateIssueParams {
     title?: string;

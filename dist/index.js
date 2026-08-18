@@ -985,8 +985,6 @@ function buildMatchContext(match) {
 var TITLE_WEIGHT = 4, DESCRIPTION_WEIGHT = 2, LABEL_WEIGHT = 2, COMMENT_WEIGHT = 1, IDENTIFIER_WEIGHT = 8, COVERAGE_BONUS = 1, TITLE_PHRASE_BONUS = 10, DESCRIPTION_PHRASE_BONUS = 5, COMMENT_PHRASE_BONUS = 2;
 
 // src/core/client.ts
-import { randomUUID } from "crypto";
-
 class BelifoaClient {
   apiKey;
   profileName;
@@ -1450,8 +1448,8 @@ class BelifoaClient {
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
     const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
     const mutation = `
-      mutation CreateIssue($input: IssueCreateInput!, $clientId: String) {
-        issueCreate(input: $input, clientId: $clientId) {
+      mutation CreateIssue($input: IssueCreateInput!) {
+        issueCreate(input: $input) {
           success
           issue {
             id
@@ -1490,8 +1488,7 @@ class BelifoaClient {
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, {
-      input,
-      clientId: params.clientId ?? randomUUID()
+      input
     });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
@@ -1634,10 +1631,10 @@ class BelifoaClient {
     }
     return { created, errors };
   }
-  async addComment(issueId, body, clientId) {
+  async addComment(issueId, body) {
     const mutation = `
-      mutation CreateComment($input: CommentCreateInput!, $clientId: String) {
-        commentCreate(input: $input, clientId: $clientId) {
+      mutation CreateComment($input: CommentCreateInput!) {
+        commentCreate(input: $input) {
           success
           comment {
             id
@@ -1648,8 +1645,7 @@ class BelifoaClient {
       }
     `;
     const data = await this.graphql(mutation, {
-      input: { issueId, body },
-      clientId: clientId ?? randomUUID()
+      input: { issueId, body }
     });
     if (!data.commentCreate.success || !data.commentCreate.comment) {
       throw new Error(`Failed to create comment on issue ${issueId}`);
@@ -1921,8 +1917,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             state: i.state,
             parentId: i.parentId,
             blockedBy: i.blockedBy,
-            blocks: i.blocks,
-            clientId: i.clientId
+            blocks: i.blocks
           }));
           const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
           const parts = [];
@@ -1959,8 +1954,7 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
             parentId: args.parentId,
             blockedBy: args.blockedBy,
             blocks: args.blocks,
-            checkExisting: Boolean(args.checkExisting || args.idempotent),
-            clientId: args.clientId
+            checkExisting: Boolean(args.checkExisting || args.idempotent)
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -1984,7 +1978,7 @@ ${formatIssueDetail(created, format, active)}` }] };
             blocks: args.blocks
           });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
             return { content: [{ type: "text", text: `\u2705 Updated issue:
 
@@ -1999,7 +1993,7 @@ ${formatIssueDetail(updated, format, active)}` }] };
             throw new Error("issueId is required for 'close' or 'resolve'.");
           const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
           }
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
           return { content: [{ type: "text", text: `\u2705 Closed/Resolved issue ${args.issueId}:
@@ -2010,7 +2004,7 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody);
           return {
             content: [
               {
@@ -2225,10 +2219,6 @@ var init_tools = __esm(() => {
           description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
         },
         commentBody: { type: "string", description: "Comment body text for 'comment', 'close', 'resolve', or 'update'" },
-        clientId: {
-          type: "string",
-          description: "Stable id for retry idempotency. Pass the same clientId when retrying a failed 'create' or 'comment' call so Linear dedupes it instead of duplicating the issue/comment."
-        },
         checkExisting: {
           type: "boolean",
           description: "If true, check if an issue with the same title exists in the team before creating"
@@ -2250,8 +2240,7 @@ var init_tools = __esm(() => {
               state: { type: "string", description: "Initial workflow state name or ID" },
               parentId: { type: "string", description: "Parent issue ID or identifier" },
               blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
-              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" },
-              clientId: { type: "string", description: "Stable id for retry idempotency (Linear dedupes creates with the same clientId)" }
+              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
             },
             required: ["title"]
           },

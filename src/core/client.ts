@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { loadConfig, getActiveProfile } from "./config.js";
 import { cleanRawIssue } from "./formatters.js";
 import {
@@ -628,8 +627,8 @@ export class BelifoaClient {
     const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
 
     const mutation = `
-      mutation CreateIssue($input: IssueCreateInput!, $clientId: String) {
-        issueCreate(input: $input, clientId: $clientId) {
+      mutation CreateIssue($input: IssueCreateInput!) {
+        issueCreate(input: $input) {
           success
           issue {
             id
@@ -672,7 +671,6 @@ export class BelifoaClient {
 
     const data = await this.graphql<{ issueCreate: { success: boolean; issue: any } }>(mutation, {
       input,
-      clientId: params.clientId ?? randomUUID(),
     });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
@@ -844,16 +842,12 @@ export class BelifoaClient {
   }
 
   /**
-   * Add comment to an issue. Pass a stable clientId to make retries idempotent.
+   * Add comment to an issue.
    */
-  async addComment(
-    issueId: string,
-    body: string,
-    clientId?: string
-  ): Promise<{ id: string; body: string }> {
+  async addComment(issueId: string, body: string): Promise<{ id: string; body: string }> {
     const mutation = `
-      mutation CreateComment($input: CommentCreateInput!, $clientId: String) {
-        commentCreate(input: $input, clientId: $clientId) {
+      mutation CreateComment($input: CommentCreateInput!) {
+        commentCreate(input: $input) {
           success
           comment {
             id
@@ -866,7 +860,6 @@ export class BelifoaClient {
 
     const data = await this.graphql<{ commentCreate: { success: boolean; comment: any } }>(mutation, {
       input: { issueId, body },
-      clientId: clientId ?? randomUUID(),
     });
 
     if (!data.commentCreate.success || !data.commentCreate.comment) {

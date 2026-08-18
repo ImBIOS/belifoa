@@ -14003,8 +14003,6 @@ function buildMatchContext(match) {
 var TITLE_WEIGHT = 4, DESCRIPTION_WEIGHT = 2, LABEL_WEIGHT = 2, COMMENT_WEIGHT = 1, IDENTIFIER_WEIGHT = 8, COVERAGE_BONUS = 1, TITLE_PHRASE_BONUS = 10, DESCRIPTION_PHRASE_BONUS = 5, COMMENT_PHRASE_BONUS = 2;
 
 // src/core/client.ts
-import { randomUUID } from "crypto";
-
 class BelifoaClient {
   apiKey;
   profileName;
@@ -14468,8 +14466,8 @@ class BelifoaClient {
     const labelIds = params.labels ? await this.resolveLabelIds(params.labels) : undefined;
     const parentId = params.parentId ? await this.resolveIssueId(params.parentId) : undefined;
     const mutation = `
-      mutation CreateIssue($input: IssueCreateInput!, $clientId: String) {
-        issueCreate(input: $input, clientId: $clientId) {
+      mutation CreateIssue($input: IssueCreateInput!) {
+        issueCreate(input: $input) {
           success
           issue {
             id
@@ -14508,8 +14506,7 @@ class BelifoaClient {
     };
     Object.keys(input).forEach((k) => input[k] === undefined && delete input[k]);
     const data = await this.graphql(mutation, {
-      input,
-      clientId: params.clientId ?? randomUUID()
+      input
     });
     if (!data.issueCreate.success || !data.issueCreate.issue) {
       throw new Error("Failed to create Linear issue.");
@@ -14652,10 +14649,10 @@ class BelifoaClient {
     }
     return { created, errors: errors3 };
   }
-  async addComment(issueId, body, clientId) {
+  async addComment(issueId, body) {
     const mutation = `
-      mutation CreateComment($input: CommentCreateInput!, $clientId: String) {
-        commentCreate(input: $input, clientId: $clientId) {
+      mutation CreateComment($input: CommentCreateInput!) {
+        commentCreate(input: $input) {
           success
           comment {
             id
@@ -14666,8 +14663,7 @@ class BelifoaClient {
       }
     `;
     const data = await this.graphql(mutation, {
-      input: { issueId, body },
-      clientId: clientId ?? randomUUID()
+      input: { issueId, body }
     });
     if (!data.commentCreate.success || !data.commentCreate.comment) {
       throw new Error(`Failed to create comment on issue ${issueId}`);
@@ -14939,8 +14935,7 @@ Workspace: **${org.name}** (\`${org.urlKey}\`)`
             state: i.state,
             parentId: i.parentId,
             blockedBy: i.blockedBy,
-            blocks: i.blocks,
-            clientId: i.clientId
+            blocks: i.blocks
           }));
           const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
           const parts = [];
@@ -14977,8 +14972,7 @@ ${result.errors.map((e) => `- Item #${e.index + 1} "${e.title}": ${e.error}`).jo
             parentId: args.parentId,
             blockedBy: args.blockedBy,
             blocks: args.blocks,
-            checkExisting: Boolean(args.checkExisting || args.idempotent),
-            clientId: args.clientId
+            checkExisting: Boolean(args.checkExisting || args.idempotent)
           });
           return { content: [{ type: "text", text: `\u2705 Created issue:
 
@@ -15002,7 +14996,7 @@ ${formatIssueDetail(created, format, active)}` }] };
             blocks: args.blocks
           });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
             return { content: [{ type: "text", text: `\u2705 Updated issue:
 
@@ -15017,7 +15011,7 @@ ${formatIssueDetail(updated, format, active)}` }] };
             throw new Error("issueId is required for 'close' or 'resolve'.");
           const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
           }
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
           return { content: [{ type: "text", text: `\u2705 Closed/Resolved issue ${args.issueId}:
@@ -15028,7 +15022,7 @@ ${formatIssueDetail(refreshed, format, active)}` }] };
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody);
           return {
             content: [
               {
@@ -15243,10 +15237,6 @@ var init_tools = __esm(() => {
           description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])"
         },
         commentBody: { type: "string", description: "Comment body text for 'comment', 'close', 'resolve', or 'update'" },
-        clientId: {
-          type: "string",
-          description: "Stable id for retry idempotency. Pass the same clientId when retrying a failed 'create' or 'comment' call so Linear dedupes it instead of duplicating the issue/comment."
-        },
         checkExisting: {
           type: "boolean",
           description: "If true, check if an issue with the same title exists in the team before creating"
@@ -15268,8 +15258,7 @@ var init_tools = __esm(() => {
               state: { type: "string", description: "Initial workflow state name or ID" },
               parentId: { type: "string", description: "Parent issue ID or identifier" },
               blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
-              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" },
-              clientId: { type: "string", description: "Stable id for retry idempotency (Linear dedupes creates with the same clientId)" }
+              blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" }
             },
             required: ["title"]
           },
@@ -15347,6 +15336,7 @@ var init_package = __esm(() => {
       "build:binary": "bun build --compile --outfile=dist/belifoa src/cli/index.ts",
       "install:bin": "bun run build:binary && mkdir -p ~/.local/bin && cp ./dist/belifoa ~/.local/bin/belifoa && chmod +x ~/.local/bin/belifoa",
       prepare: "bun run build",
+      postinstall: "lefthook install",
       dev: "bun run src/cli/index.ts",
       mcp: "bun run src/cli/index.ts mcp",
       test: "bun test",
@@ -15382,6 +15372,7 @@ var init_package = __esm(() => {
     devDependencies: {
       "@types/bun": "latest",
       "@types/node": "^22.10.2",
+      lefthook: "^2.1.10",
       typescript: "^5.7.2"
     }
   };
@@ -17726,7 +17717,7 @@ program2.command("branch <id>").description("Get git branch name slug for a Line
     process.exit(1);
   }
 });
-program2.command("create").description("Create a new Linear issue").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Automatically assign created issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("--check-existing", "Check if issue with same title exists in team before creating").option("--idempotent", "Check if issue with same title exists in team before creating (alias)").option("--client-id <id>", "Stable id for retry idempotency (Linear dedupes creates with the same clientId)").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
+program2.command("create").description("Create a new Linear issue").option("-p, --profile <profile>", "Target workspace profile").option("-w, --workspace <profile>", "Target workspace profile (alias)").option("-t, --team <team>", "Team ID or Key (e.g. ENG)").requiredOption("--title <title>", "Issue title").option("-d, --description <description>", "Issue description").option("--priority <priority>", "Priority (1=Urgent, 2=High, 3=Normal, 4=Low)", "0").option("-a, --assignee <assignee>", "Assignee user ID, email, or name ('me' to assign yourself)").option("--assign-me", "Automatically assign created issue to yourself").option("--project <project>", "Project name or ID").option("-e, --estimate <points>", "Story points estimate (e.g., 1, 2, 3, 5, 8)").option("--points <points>", "Story points estimate (alias for --estimate)").option("--due-date <date>", "Due date (YYYY-MM-DD)").option("-l, --labels <labels>", "Comma-separated issue labels").option("-s, --state <state>", "Initial workflow state ID or name (e.g. 'Todo', 'In Progress')").option("--parent <id>", "Parent issue ID or identifier (e.g. 'ENG-100')").option("--blocked-by <ids>", "Comma-separated issue IDs or identifiers blocking this issue").option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue").option("--check-existing", "Check if issue with same title exists in team before creating").option("--idempotent", "Check if issue with same title exists in team before creating (alias)").option("-f, --format <format>", "Output format", "cli_table").action(async (options) => {
   try {
     const profileName = options.profile || options.workspace;
     const active = getActiveProfile(profileName);
@@ -17752,8 +17743,7 @@ program2.command("create").description("Create a new Linear issue").option("-p, 
       parentId: options.parent,
       blockedBy: options.blockedBy,
       blocks: options.blocks,
-      checkExisting: Boolean(options.checkExisting || options.idempotent),
-      clientId: options.clientId
+      checkExisting: Boolean(options.checkExisting || options.idempotent)
     });
     console.log(formatIssueDetail(issue2, options.format, active));
   } catch (err) {

@@ -184,11 +184,6 @@ export const manageIssueToolSchema = {
         description: "Array of issue IDs or identifiers that this issue blocks (e.g. ['ENG-105'])",
       },
       commentBody: { type: "string", description: "Comment body text for 'comment', 'close', 'resolve', or 'update'" },
-      clientId: {
-        type: "string",
-        description:
-          "Stable id for retry idempotency. Pass the same clientId when retrying a failed 'create' or 'comment' call so Linear dedupes it instead of duplicating the issue/comment.",
-      },
       checkExisting: {
         type: "boolean",
         description: "If true, check if an issue with the same title exists in the team before creating",
@@ -211,7 +206,6 @@ export const manageIssueToolSchema = {
             parentId: { type: "string", description: "Parent issue ID or identifier" },
             blockedBy: { type: "array", items: { type: "string" }, description: "Blocking issue IDs/identifiers" },
             blocks: { type: "array", items: { type: "string" }, description: "Blocked issue IDs/identifiers" },
-            clientId: { type: "string", description: "Stable id for retry idempotency (Linear dedupes creates with the same clientId)" },
           },
           required: ["title"],
         },
@@ -500,7 +494,6 @@ export async function handleToolCall(
             parentId: i.parentId,
             blockedBy: i.blockedBy,
             blocks: i.blocks,
-            clientId: i.clientId,
           }));
 
           const result = await targetClient.createBulkIssues(items, defaultTeam, checkExisting);
@@ -538,7 +531,6 @@ export async function handleToolCall(
             blockedBy: args.blockedBy,
             blocks: args.blocks,
             checkExisting: Boolean(args.checkExisting || args.idempotent),
-            clientId: args.clientId,
           });
           return { content: [{ type: "text", text: `✅ Created issue:\n\n${formatIssueDetail(created, format, active)}` }] };
         }
@@ -560,7 +552,7 @@ export async function handleToolCall(
             blocks: args.blocks,
           });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
             const refreshed = await targetClient.getIssue(args.issueId).catch(() => updated);
             return { content: [{ type: "text", text: `✅ Updated issue:\n\n${formatIssueDetail(refreshed, format, active)}` }] };
           }
@@ -571,7 +563,7 @@ export async function handleToolCall(
           if (!args.issueId) throw new Error("issueId is required for 'close' or 'resolve'.");
           const updated = await targetClient.updateIssue(args.issueId, { state: "Done" });
           if (args.commentBody) {
-            await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+            await targetClient.addComment(args.issueId, args.commentBody);
           }
           const refreshed = args.commentBody ? await targetClient.getIssue(args.issueId).catch(() => updated) : updated;
           return { content: [{ type: "text", text: `✅ Closed/Resolved issue ${args.issueId}:\n\n${formatIssueDetail(refreshed, format, active)}` }] };
@@ -581,7 +573,7 @@ export async function handleToolCall(
           if (!args.issueId || !args.commentBody) {
             throw new Error("issueId and commentBody are required for 'comment'.");
           }
-          const comment = await targetClient.addComment(args.issueId, args.commentBody, args.clientId);
+          const comment = await targetClient.addComment(args.issueId, args.commentBody);
           return {
             content: [
               {

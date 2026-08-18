@@ -417,7 +417,6 @@ program
   .option("--blocks <ids>", "Comma-separated issue IDs or identifiers blocked by this issue")
   .option("--check-existing", "Check if issue with same title exists in team before creating")
   .option("--idempotent", "Check if issue with same title exists in team before creating (alias)")
-  .option("--client-id <id>", "Stable id for retry idempotency (Linear dedupes creates with the same clientId)")
   .option("-f, --format <format>", "Output format", "cli_table")
   .action(async (options) => {
     try {
@@ -447,7 +446,6 @@ program
         blockedBy: options.blockedBy,
         blocks: options.blocks,
         checkExisting: Boolean(options.checkExisting || options.idempotent),
-        clientId: options.clientId,
       });
       console.log(formatIssueDetail(issue, options.format as OutputFormat, active));
     } catch (err: any) {
